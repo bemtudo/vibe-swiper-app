@@ -52,23 +52,19 @@ export default function Swiper({ user }: SwiperProps) {
       
       setStatusMessage(`Found ${excludedIds.length} names already swiped. Fetching new names...`)
 
-      // --- STEP 2: Dynamically build the fetch query ---
-      let query = supabase
+      // --- STEP 2: Fetch all names and filter client-side ---
+      const { data: allNames, error: nameError } = await supabase
         .from('male_names')
         .select('*')
-
-      // 🚨 CRITICAL FIX: Only apply the exclusion filter if there are UUIDs to exclude.
-      if (excludedIds.length > 0) {
-        query = query.not('uuid_id', 'in', excludedIds)
-      }
+        .limit(BATCH_SIZE * 3) // Fetch more to account for filtering
       
-      // Complete the query with limits and execute
-      const { data: nameData, error: nameError } = await query.limit(BATCH_SIZE * 2)
-
       if (nameError) throw nameError
       
+      // --- STEP 3: Filter out swiped names client-side ---
+      const availableNames = allNames.filter(name => !excludedIds.includes(name.uuid_id))
+      
       // Randomize and limit the batch
-      const shuffledNames = (nameData as Name[]) 
+      const shuffledNames = availableNames
         .sort(() => 0.5 - Math.random())
         .slice(0, BATCH_SIZE)
 
