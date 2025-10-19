@@ -6,8 +6,8 @@ import { supabase } from '@/lib/supabase' // Using the client exported from lib/
 
 // Define the Name type based on our male_names table schema
 type Name = {
-  id: number  // Keep the integer id for now
-  uuid_id: string  // Use UUID for database operations
+  // 🚨 FIX: Renamed 'id' to 'uuid_id' to match the database schema
+  uuid_id: string 
   name: string
   name_set: 'English' | 'Turkish' | 'International' // Name set is now only used for display/logging
   origin: string
@@ -39,7 +39,7 @@ export default function Swiper({ user }: SwiperProps) {
     setStatusMessage(`Loading a batch of new names...`)
 
     try {
-      // --- STEP 1: Fetch UUID IDs of ALL names already swiped by the current user ---
+      // --- STEP 1: Fetch IDs of ALL names already swiped by the current user ---
       const { data: swipedData, error: swipedError } = await supabase
         .from('user_swipes')
         .select('name_id')
@@ -47,24 +47,29 @@ export default function Swiper({ user }: SwiperProps) {
 
       if (swipedError) throw swipedError
 
-      // Extract the array of UUID IDs to exclude
+      // Extract the array of name IDs to exclude
       const excludedIds = swipedData.map(swipe => swipe.name_id)
       
       setStatusMessage(`Found ${excludedIds.length} names already swiped. Fetching new names...`)
 
-      // --- STEP 2: Fetch all names and filter client-side ---
-      const { data: allNames, error: nameError } = await supabase
+      // --- STEP 2: Dynamically build the fetch query ---
+      let query = supabase
         .from('male_names')
-        .select('*')
-        .limit(BATCH_SIZE * 3) // Fetch more to account for filtering
+        // 🚨 FIX: Request all columns, including the correct UUID column: uuid_id
+        .select('uuid_id, name, name_set, origin, meaning, easy_pronunciation, vibe_score') 
+
+      // 🚨 CRITICAL FIX: Use 'uuid_id' in the exclusion filter
+      if (excludedIds.length > 0) {
+        query = query.not('uuid_id', 'in', excludedIds)
+      }
       
+      // Complete the query with limits and execute
+      const { data: nameData, error: nameError } = await query.limit(BATCH_SIZE * 2)
+
       if (nameError) throw nameError
       
-      // --- STEP 3: Filter out swiped names client-side ---
-      const availableNames = allNames.filter(name => !excludedIds.includes(name.uuid_id))
-      
       // Randomize and limit the batch
-      const shuffledNames = availableNames
+      const shuffledNames = (nameData as Name[]) 
         .sort(() => 0.5 - Math.random())
         .slice(0, BATCH_SIZE)
 
