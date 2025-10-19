@@ -3,11 +3,9 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import AuthForm from '@/components/AuthForm'
-import Swiper from '@/components/Swiper' // Now imports the fixed Swiper logic
+import Swiper from '@/components/Swiper'
+import { FaHeart, FaListAlt, FaUsers, FaSignOutAlt } from 'react-icons/fa'
 
-// ------------------------------------------------
-// Results View Component (Embedded)
-// ------------------------------------------------
 const ResultsView = ({ user }: { user: any }) => {
   const [likedNames, setLikedNames] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -15,11 +13,10 @@ const ResultsView = ({ user }: { user: any }) => {
   useEffect(() => {
     const fetchLikedNames = async () => {
       try {
-        // Step 1: Get liked name IDs from user_swipes
         const { data: swipeData, error: swipeError } = await supabase
           .from('user_swipes')
           .select('name_id')
-          .eq('user_id', user.id) 
+          .eq('user_id', user.id)
           .eq('swipe_action', 'LIKE')
 
         if (swipeError) throw swipeError
@@ -29,8 +26,7 @@ const ResultsView = ({ user }: { user: any }) => {
           return;
         }
 
-        // Step 2: Get name details from male_names using the UUID IDs
-        const nameIds = swipeData.map(s => s.name_id); // Use UUID strings directly
+        const nameIds = swipeData.map(s => s.name_id);
         const { data: nameData, error: nameError } = await supabase
           .from('male_names')
           .select('*')
@@ -46,7 +42,7 @@ const ResultsView = ({ user }: { user: any }) => {
         setLoading(false)
       }
     }
-    
+
     if (user) {
       fetchLikedNames()
     }
@@ -54,45 +50,39 @@ const ResultsView = ({ user }: { user: any }) => {
 
   if (loading) {
     return (
-      <div className="text-center p-8 text-gray-600">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-        Loading your favorite VIBES...
+      <div className="flex flex-col items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-10 w-10 border-3 border-teal-500 border-t-transparent mb-4"></div>
+        <p className="text-gray-500 text-sm">Loading your favorites...</p>
       </div>
     )
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <h2 className="text-3xl font-bold mb-6 text-gray-800 border-b pb-2">
-        Your Favorite VIBES ({likedNames.length})
-      </h2>
-      
+    <div className="pb-24">
       {likedNames.length === 0 ? (
-        <div className="p-8 bg-pink-50 border-l-4 border-pink-400 rounded-xl text-center shadow-lg">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-pink-500 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-          </svg>
-          <p className="text-gray-700 font-semibold">No likes yet!</p>
-          <p className="text-sm text-gray-500 mt-1">Head back to the Swiper to start building your list.</p>
+        <div className="flex flex-col items-center justify-center py-16 px-6">
+          <div className="bg-gray-100 rounded-full p-6 mb-4">
+            <FaHeart className="text-5xl text-gray-400" />
+          </div>
+          <p className="text-xl font-bold text-gray-800 mb-2">No favorites yet</p>
+          <p className="text-sm text-gray-500 text-center">Start swiping to build your list</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="space-y-3 px-4">
           {likedNames.map((name, index) => (
-            // Match list card design
-            <div key={index} className="p-4 bg-white rounded-xl shadow-lg border-2 border-green-200 transition hover:shadow-xl">
-              <div className="flex justify-between items-center mb-2">
-                <h3 className="text-2xl font-extrabold text-gray-900">{name.name}</h3>
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-500" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
-                </svg>
+            <div key={index} className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+              <div className="flex items-start justify-between mb-2">
+                <div>
+                  <h3 className="text-2xl font-bold text-gray-900">{name.name}</h3>
+                  <p className="text-sm text-gray-500 mt-1">/{name.easy_pronunciation}/</p>
+                </div>
+                <FaHeart className="text-xl text-pink-500 mt-1" />
               </div>
-              <p className="text-sm font-medium text-gray-600">
-                / {name.easy_pronunciation} /
-              </p>
-              <div className="mt-3 space-y-1">
-                <p className="text-xs text-gray-500"><span className="font-semibold text-gray-700">Origin:</span> {name.origin}</p>
-                <p className="text-xs text-gray-500"><span className="font-semibold text-gray-700">Pool:</span> {name.name_set}</p>
-                <p className="text-xs text-gray-500 italic">Meaning: {name.meaning}</p>
+              <p className="text-gray-700 text-sm mb-2">{name.meaning}</p>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500">{name.origin}</span>
+                <span className="text-xs text-gray-300">•</span>
+                <span className="text-xs text-gray-500">{name.name_set}</span>
               </div>
             </div>
           ))}
@@ -102,31 +92,117 @@ const ResultsView = ({ user }: { user: any }) => {
   )
 }
 
-// ------------------------------------------------
-// Sign Out Button Component (Embedded)
-// ------------------------------------------------
-const SignOutButton = () => {
-  const handleSignOut = async () => {
-    const { error } = await supabase.auth.signOut()
-    if (error) {
-      console.error('Sign Out Error:', error)
+const MatchesView = ({ user }: { user: any }) => {
+  const [matches, setMatches] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchMatches = async () => {
+      try {
+        const { data: profileData } = await supabase
+          .from('user_profiles')
+          .select('partner_id')
+          .eq('user_id', user.id)
+          .maybeSingle()
+
+        if (!profileData?.partner_id) {
+          setLoading(false)
+          return
+        }
+
+        const { data: myLikes } = await supabase
+          .from('user_swipes')
+          .select('name_id')
+          .eq('user_id', user.id)
+          .eq('swipe_action', 'LIKE')
+
+        const { data: partnerLikes } = await supabase
+          .from('user_swipes')
+          .select('name_id')
+          .eq('user_id', profileData.partner_id)
+          .eq('swipe_action', 'LIKE')
+
+        if (!myLikes || !partnerLikes) {
+          setLoading(false)
+          return
+        }
+
+        const myLikeIds = myLikes.map(s => s.name_id)
+        const partnerLikeIds = partnerLikes.map(s => s.name_id)
+        const commonIds = myLikeIds.filter(id => partnerLikeIds.includes(id))
+
+        if (commonIds.length > 0) {
+          const { data: nameData } = await supabase
+            .from('male_names')
+            .select('*')
+            .in('uuid_id', commonIds)
+
+          setMatches(nameData || [])
+        }
+
+      } catch (err) {
+        console.error('Error fetching matches:', err)
+      } finally {
+        setLoading(false)
+      }
     }
+
+    if (user) {
+      fetchMatches()
+    }
+  }, [user])
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-10 w-10 border-3 border-teal-500 border-t-transparent mb-4"></div>
+        <p className="text-gray-500 text-sm">Finding your matches...</p>
+      </div>
+    )
   }
-  
+
   return (
-    <button 
-      onClick={handleSignOut}
-      className="px-4 py-2 bg-red-500 text-white font-semibold rounded-lg hover:bg-red-600 transition text-sm"
-    >
-      Sign Out
-    </button>
+    <div className="pb-24">
+      {matches.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 px-6">
+          <div className="bg-gray-100 rounded-full p-6 mb-4">
+            <FaUsers className="text-5xl text-gray-400" />
+          </div>
+          <p className="text-xl font-bold text-gray-800 mb-2">No matches yet</p>
+          <p className="text-sm text-gray-500 text-center">Connect with your partner to see mutual favorites</p>
+        </div>
+      ) : (
+        <div className="space-y-3 px-4">
+          {matches.map((name, index) => (
+            <div key={index} className="bg-gradient-to-br from-pink-50 to-purple-50 rounded-2xl p-5 shadow-sm border border-pink-200">
+              <div className="flex items-start justify-between mb-2">
+                <div>
+                  <h3 className="text-2xl font-bold text-gray-900">{name.name}</h3>
+                  <p className="text-sm text-gray-500 mt-1">/{name.easy_pronunciation}/</p>
+                </div>
+                <div className="flex items-center gap-1">
+                  <FaHeart className="text-lg text-pink-500" />
+                  <FaHeart className="text-lg text-pink-500" />
+                </div>
+              </div>
+              <p className="text-gray-700 text-sm mb-2">{name.meaning}</p>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500">{name.origin}</span>
+                <span className="text-xs text-gray-300">•</span>
+                <span className="text-xs text-gray-500">{name.name_set}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
 export default function Home() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [view, setView] = useState<'swiper' | 'results'>('swiper')
+  const [view, setView] = useState<'swiper' | 'results' | 'matches'>('swiper')
   
   useEffect(() => {
     // Get current user and listen for auth changes
@@ -141,91 +217,90 @@ export default function Home() {
       (event, session) => {
         setUser(session?.user)
         setLoading(false)
-        // If the user logs out, reset the view to swiper
-        if (event === 'SIGNED_OUT') setView('swiper') 
+        if (event === 'SIGNED_OUT') setView('swiper')
       }
     )
     return () => subscription.unsubscribe()
   }, [])
 
+  const handleSignOut = async () => {
+    const { error } = await supabase.auth.signOut()
+    if (error) {
+      console.error('Sign Out Error:', error)
+    }
+  }
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading authentication...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-3 border-teal-500 border-t-transparent mx-auto mb-4"></div>
+          <p className="text-gray-500">Loading...</p>
         </div>
       </div>
     )
   }
 
   if (!user) {
-    // Show AuthForm when not logged in
     return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="bg-white shadow-sm">
-          <div className="max-w-md mx-auto px-4 py-6">
-            <div className="text-center">
-              <h1 className="text-3xl font-bold text-gray-900">Vibe Swiper</h1>
-              <p className="mt-2 text-gray-600">Find the perfect baby name</p>
-            </div>
-          </div>
-        </div>
-        <div className="max-w-md mx-auto px-4 py-8">
-          <AuthForm />
-        </div>
+      <div className="min-h-screen bg-white">
+        <AuthForm />
       </div>
     )
   }
 
-  // Logged-in user view: Header + Navigation + Content
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header with Navigation */}
-      <div className="bg-white shadow-sm sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto px-4 py-6">
-          <div className="flex justify-between items-center">
-            <div className="flex-shrink-0">
-              <h1 className="text-3xl font-bold text-gray-900">Vibe Swiper</h1>
-              <p className="mt-1 text-sm text-gray-500">Welcome, {user.email}</p>
-            </div>
-            <div className="flex space-x-4 items-center">
-              <button
-                onClick={() => setView('swiper')}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition ${
-                  view === 'swiper' 
-                    ? 'bg-blue-600 text-white shadow-md' 
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                Swiper
-              </button>
-              <button
-                onClick={() => setView('results')}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition ${
-                  view === 'results' 
-                    ? 'bg-blue-600 text-white shadow-md' 
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                My Likes
-              </button>
-              <SignOutButton />
-            </div>
-          </div>
+    <div className="min-h-screen bg-white flex flex-col">
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
+        <div className="max-w-md mx-auto px-4 py-4 flex justify-between items-center">
+          <h1 className="text-xl font-bold text-gray-900">Vibe Swiper</h1>
+          <button
+            onClick={handleSignOut}
+            className="p-2 text-gray-500 hover:text-gray-700 transition"
+            aria-label="Sign Out"
+          >
+            <FaSignOutAlt className="text-lg" />
+          </button>
         </div>
-      </div>
+      </header>
 
-      {/* Main Content Area */}
-      <div className="px-4 py-8">
-        {view === 'swiper' && (
-          <div className="text-center">
-            {/* DEBUG MESSAGE REMOVED - The code itself is the test now */}
-            <Swiper user={user} />
-          </div>
-        )}
+      <main className="flex-1 overflow-y-auto max-w-md mx-auto w-full">
+        {view === 'swiper' && <Swiper user={user} />}
         {view === 'results' && <ResultsView user={user} />}
-      </div>
+        {view === 'matches' && <MatchesView user={user} />}
+      </main>
+
+      <nav className="bg-white border-t border-gray-200 fixed bottom-0 left-0 right-0 z-20">
+        <div className="max-w-md mx-auto px-4 py-2 flex justify-around">
+          <button
+            onClick={() => setView('swiper')}
+            className={`flex flex-col items-center py-2 px-4 rounded-lg transition ${
+              view === 'swiper' ? 'text-teal-500' : 'text-gray-400'
+            }`}
+          >
+            <FaHeart className="text-2xl mb-1" />
+            <span className="text-xs font-medium">Swipe</span>
+          </button>
+          <button
+            onClick={() => setView('results')}
+            className={`flex flex-col items-center py-2 px-4 rounded-lg transition ${
+              view === 'results' ? 'text-teal-500' : 'text-gray-400'
+            }`}
+          >
+            <FaListAlt className="text-2xl mb-1" />
+            <span className="text-xs font-medium">Favorites</span>
+          </button>
+          <button
+            onClick={() => setView('matches')}
+            className={`flex flex-col items-center py-2 px-4 rounded-lg transition ${
+              view === 'matches' ? 'text-teal-500' : 'text-gray-400'
+            }`}
+          >
+            <FaUsers className="text-2xl mb-1" />
+            <span className="text-xs font-medium">Matches</span>
+          </button>
+        </div>
+      </nav>
     </div>
   )
 }

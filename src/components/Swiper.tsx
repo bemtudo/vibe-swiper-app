@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect, useCallback } from 'react'
 import { User } from '@supabase/supabase-js'
-import { supabase } from '@/lib/supabase' // Using the client exported from lib/supabase
-import { FaHeart, FaTimes, FaChevronDown } from 'react-icons/fa' // Ensure you have react-icons installed
+import { supabase } from '@/lib/supabase'
+import { FaHeart, FaTimes } from 'react-icons/fa'
 
 // Define the Name type based on our male_names table schema
 type Name = {
@@ -167,79 +167,74 @@ export default function Swiper({ user }: SwiperProps) {
   // ------------------------------------------------
 
   return (
-    <div className="flex flex-col h-full w-full max-w-sm mx-auto p-4">
-      
-      {/* Status Message */}
-      <div className={`text-center mb-4 text-sm font-medium h-6 ${statusMessage.includes('Error') ? 'text-red-500' : 'text-green-600'}`}>
-        {statusMessage}
-      </div>
-
-      {/* Conditional Content */}
+    <div className="flex flex-col h-full w-full pb-20">
       {(loading && !currentName) || !user.id ? (
-        <div className="flex flex-col items-center justify-center h-96 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
-          <FaChevronDown className="animate-bounce text-4xl mb-4 text-gray-400" />
-          <p className="text-lg font-semibold text-gray-500">
+        <div className="flex flex-col items-center justify-center py-24">
+          <div className="animate-spin rounded-full h-12 w-12 border-3 border-teal-500 border-t-transparent mb-4"></div>
+          <p className="text-gray-500 text-sm">
             {user.id ? "Loading names..." : "Please sign in to start swiping."}
           </p>
         </div>
       ) : currentName ? (
-        <div className="flex-1 bg-white rounded-xl shadow-2xl p-6 flex flex-col justify-between mb-8 transform transition-transform duration-300 ease-out border-t-4 border-blue-500">
-          <div className="text-center">
-            <p className="text-lg font-light text-gray-500 uppercase tracking-widest">
-              {currentName.origin} Name
-            </p>
-            <h2 className="text-6xl font-extrabold text-gray-800 my-8">
-              {currentName.name}
-            </h2>
-            <div className="text-gray-600 space-y-2">
-              <p className="text-xl font-semibold">{currentName.meaning}</p>
-              <p className="text-md font-light italic">
-                Pronunciation: /{currentName.easy_pronunciation}/
-              </p>
-               <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
-                currentName.name_set === 'English' ? 'bg-green-100 text-green-800' :
-                currentName.name_set === 'Turkish' ? 'bg-red-100 text-red-800' :
-                'bg-blue-100 text-blue-800'
-              }`}>
-                {currentName.name_set} Pool
-              </span>
+        <>
+          <div className="flex-1 flex items-center justify-center px-4 py-8">
+            <div className="bg-white rounded-3xl shadow-xl p-8 w-full max-w-sm border border-gray-100">
+              <div className="text-center">
+                <span className="inline-block px-4 py-1 rounded-full text-xs font-semibold text-teal-600 bg-teal-50 mb-4">
+                  {currentName.origin}
+                </span>
+                <h2 className="text-5xl font-black text-gray-900 mb-6 leading-tight">
+                  {currentName.name}
+                </h2>
+                <p className="text-gray-600 text-base mb-3 leading-relaxed">
+                  {currentName.meaning}
+                </p>
+                <p className="text-sm text-gray-400 mb-4">
+                  /{currentName.easy_pronunciation}/
+                </p>
+                <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
+                  currentName.name_set === 'English' ? 'bg-blue-50 text-blue-700' :
+                  currentName.name_set === 'Turkish' ? 'bg-purple-50 text-purple-700' :
+                  'bg-green-50 text-green-700'
+                }`}>
+                  {currentName.name_set}
+                </span>
+              </div>
             </div>
           </div>
-        </div>
+
+          <div className="fixed bottom-20 left-0 right-0 px-6 pb-4 bg-gradient-to-t from-white via-white to-transparent pt-8">
+            <div className="max-w-md mx-auto flex justify-center gap-6">
+              <button
+                onClick={handleDislike}
+                disabled={loading}
+                className="flex items-center justify-center w-16 h-16 rounded-full bg-white border-2 border-gray-200 text-gray-600 shadow-lg hover:shadow-xl hover:scale-110 active:scale-95 transition-all disabled:opacity-50"
+                aria-label="Skip Name"
+              >
+                <FaTimes className="text-2xl" />
+              </button>
+              <button
+                onClick={handleLike}
+                disabled={loading}
+                className="flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-pink-500 to-red-500 text-white shadow-xl hover:shadow-2xl hover:scale-110 active:scale-95 transition-all disabled:opacity-50"
+                aria-label="Like Name"
+              >
+                <FaHeart className="text-3xl" />
+              </button>
+            </div>
+          </div>
+        </>
       ) : (
-        <div className="text-center p-8 bg-yellow-50 border-l-4 border-yellow-500 rounded-lg h-96 flex flex-col justify-center">
-          <h3 className="text-2xl font-semibold text-gray-800">All Done!</h3>
-          <p className="mt-2 text-grayis-600">
-            You have swiped all available names!
+        <div className="flex flex-col items-center justify-center py-24 px-6">
+          <div className="bg-gray-100 rounded-full p-6 mb-4">
+            <FaHeart className="text-5xl text-gray-400" />
+          </div>
+          <h3 className="text-xl font-bold text-gray-800 mb-2">All Done!</h3>
+          <p className="text-sm text-gray-500 text-center">
+            You've swiped all available names
           </p>
         </div>
       )}
-
-      {/* Control Buttons */}
-      {currentName && (
-        <div className="flex justify-around space-x-4">
-          <button
-            onClick={handleDislike}
-            disabled={loading}
-            className="flex items-center justify-center p-4 w-1/2 rounded-full bg-red-500 hover:bg-red-600 text-white shadow-lg transition duration-150 ease-in-out transform hover:scale-105 disabled:opacity-50"
-            aria-label="Skip Name"
-          >
-            <FaTimes className="text-3xl mr-2" /> Skip
-          </button>
-          <button
-            onClick={handleLike}
-            disabled={loading}
-            className="flex items-center justify-center p-4 w-1/2 rounded-full bg-green-500 hover:bg-green-600 text-white shadow-lg transition duration-150 ease-in-out transform hover:scale-105 disabled:opacity-50"
-            aria-label="Like Name"
-          >
-            <FaHeart className="text-3xl mr-2" /> VIBE
-          </button>
-        </div>
-      )}
-      
-      <div className="mt-4 text-xs text-center text-gray-400">
-          {namesQueue.length} names left in queue.
-      </div>
     </div>
   )
 }
