@@ -283,6 +283,124 @@ const ResultsView = ({ user }: { user: User }) => {
 }
 
 // ------------------------------------------------
+// Partner Linking Component
+// ------------------------------------------------
+const PartnerLinking = ({ user }: { user: User }) => {
+  const [partnerEmail, setPartnerEmail] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState('')
+  const [partnerLinked, setPartnerLinked] = useState(false)
+
+  // Check if user already has a partner linked
+  useEffect(() => {
+    const checkPartnerStatus = async () => {
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('partner_id, partner_email')
+        .eq('id', user.id)
+        .single()
+      
+      if (profile?.partner_id) {
+        setPartnerLinked(true)
+      }
+    }
+    checkPartnerStatus()
+  }, [user.id])
+
+  const handleLinkPartner = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!partnerEmail) return
+    
+    setLoading(true)
+    setMessage('')
+
+    try {
+      // Look up the partner's user ID
+      const { data: partnerData, error: lookupError } = await supabase
+        .from('user_profiles')
+        .select('id')
+        .eq('email', partnerEmail.toLowerCase())
+        .single()
+
+      if (lookupError && lookupError.code !== 'PGRST116') {
+        throw new Error('Error looking up partner')
+      }
+
+      const partnerId = partnerData?.id || null
+
+      // Update current user's profile with partner info
+      const { error: updateError } = await supabase
+        .from('user_profiles')
+        .update({ 
+          partner_email: partnerEmail.toLowerCase(), 
+          partner_id: partnerId 
+        })
+        .eq('id', user.id)
+
+      if (updateError) throw updateError
+
+      // If partner was found, link them back
+      if (partnerId) {
+        await supabase
+          .from('user_profiles')
+          .update({ partner_id: user.id })
+          .eq('id', partnerId)
+        
+        setPartnerLinked(true)
+        setMessage('Successfully linked with your partner! 🎉')
+      } else {
+        setMessage('Partner email saved! They can link with you when they sign up.')
+      }
+
+      setPartnerEmail('')
+    } catch (error: any) {
+      setMessage(error.message || 'Failed to link partner')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (partnerLinked) {
+    return (
+      <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
+        <div className="flex items-center">
+          <FaUsers className="text-green-600 mr-2" />
+          <span className="text-green-800 text-sm font-medium">Partner linked! You can see mutual matches.</span>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+      <h3 className="text-sm font-semibold text-blue-800 mb-2">Link with Your Partner</h3>
+      <form onSubmit={handleLinkPartner} className="flex gap-2">
+        <input
+          type="email"
+          value={partnerEmail}
+          onChange={(e) => setPartnerEmail(e.target.value)}
+          placeholder="partner@email.com"
+          className="flex-1 px-3 py-2 text-sm border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          required
+        />
+        <button
+          type="submit"
+          disabled={loading}
+          className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50"
+        >
+          {loading ? 'Linking...' : 'Link'}
+        </button>
+      </form>
+      {message && (
+        <p className={`text-xs mt-2 ${message.includes('Success') ? 'text-green-700' : 'text-red-700'}`}>
+          {message}
+        </p>
+      )}
+    </div>
+  )
+}
+
+// ------------------------------------------------
 // Fixed Bottom Navigation Component
 // ------------------------------------------------
 const BottomNavigation = ({ view, setView, user }: { view: string, setView: (v: 'swiper' | 'results' | 'matches') => void, user: User }) => {
@@ -393,6 +511,7 @@ export default function Home() {
 
       {/* Main Content Area */}
       <main className="px-2 py-4">
+        <PartnerLinking user={user} />
         {view === 'swiper' && <Swiper user={user} />}
         {view === 'results' && <ResultsView user={user} />}
         {view === 'matches' && <MatchesView user={user} />} 
