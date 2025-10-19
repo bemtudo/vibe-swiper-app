@@ -17,6 +17,7 @@ type Name = {
   origin: string
   meaning: string
   easy_pronunciation: string
+  vibe_score?: number
   // Ensure all columns are fetched
 }
 
@@ -43,31 +44,28 @@ export function Swiper({ user }: SwiperProps) {
     setStatusMessage(`Loading batch of ${pool} names...`)
 
     try {
-      // Use a single, efficient query to select names NOT IN the user_swipes table
-      // This is far more scalable than fetching all swiped IDs first.
+      // First, get all names from the pool
       const { data: nameData, error: nameError } = await supabaseClient
         .from('male_names')
         .select('*')
         .eq('name_set', pool)
-        
-        // 🚨 EFFICIENT EXCLUSION LOGIC: Use a subquery to filter names 
-        // that do NOT exist in the user_swipes table for the current user.
-        .not('id', 'in', supabaseClient
-            .from('user_swipes')
-            .select('name_id')
-            .eq('user_id', user.id)
-        )
-        // Ordering by random() is OK for small batches, but we will shuffle client-side 
-        // as the Supabase client doesn't directly expose .order('random()') easily for this scenario.
-        // For a true random selection in a scalable way, we would ideally use a database function.
-        // We will fetch more than needed and shuffle client-side to mitigate table-scanning risk.
-        .limit(BATCH_SIZE * 2) // Fetch a larger pool to select from
       
       if (nameError) throw nameError
 
-      // Randomize the batch locally for a true "shuffle" experience
-      // We limit to BATCH_SIZE after shuffling the larger fetched pool.
-      const shuffledNames = nameData
+      // Then, get the user's swiped names
+      const { data: swipedData, error: swipeError } = await supabaseClient
+        .from('user_swipes')
+        .select('name_id')
+        .eq('user_id', user.id)
+      
+      if (swipeError) throw swipeError
+
+      // Filter out already swiped names
+      const swipedIds = new Set(swipedData?.map(s => s.name_id) || [])
+      const availableNames = nameData?.filter(name => !swipedIds.has(name.id)) || []
+
+      // Randomize and limit the batch
+      const shuffledNames = availableNames
         .sort(() => 0.5 - Math.random())
         .slice(0, BATCH_SIZE)
 
