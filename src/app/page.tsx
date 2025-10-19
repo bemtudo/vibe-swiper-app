@@ -134,6 +134,15 @@ export default function Home() {
   const [view, setView] = useState<'swiper' | 'results'>('swiper')
 
   useEffect(() => {
+    // Handle email confirmation redirects
+    const handleAuthRedirect = async () => {
+      const { data, error } = await supabase.auth.getSession()
+      if (data.session) {
+        setUser(data.session.user)
+      }
+      setLoading(false)
+    }
+
     // Get current user
     const getUser = async () => {
       const { data: { session } } = await supabase.auth.getSession()
