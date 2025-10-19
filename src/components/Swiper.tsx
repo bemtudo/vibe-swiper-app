@@ -40,24 +40,30 @@ export default function Swiper({ user }: SwiperProps) {
     setStatusMessage(`Loading batch of ${pool} names...`)
 
     try {
-      // 🚨 FIX: Use subquery exclusion and specific pool filtering (correct implementation from our plan)
-      const subquery = supabase
+      // Step 1: Get all names from the selected pool
+      const { data: allNames, error: namesError } = await supabase
+        .from('male_names')
+        .select('*')
+        .eq('name_set', pool)
+        .limit(BATCH_SIZE * 3) // Fetch more to account for filtering
+      
+      if (namesError) throw namesError
+
+      // Step 2: Get user's swiped names for this pool
+      const { data: swipedData, error: swipedError } = await supabase
         .from('user_swipes')
         .select('name_id')
         .eq('user_id', user.id)
-        .filter('pool_used', 'eq', pool) // Only exclude names swiped in this pool
-
-      const { data: nameData, error: nameError } = await supabase
-        .from('male_names')
-        .select('*')
-        .eq('name_set', pool) // Filter by the active pool
-        .not('id', 'in', subquery) // Exclude swiped names
-        .limit(BATCH_SIZE * 2) // Fetch a larger pool for client-side shuffling
+        .eq('pool_used', pool)
       
-      if (nameError) throw nameError
+      if (swipedError) throw swipedError
+
+      // Step 3: Filter out swiped names client-side
+      const swipedIds = new Set(swipedData?.map(s => s.name_id) || [])
+      const availableNames = (allNames as Name[]).filter(name => !swipedIds.has(name.id))
 
       // Randomize and limit the batch
-      const shuffledNames = (nameData as Name[]) 
+      const shuffledNames = availableNames
         .sort(() => 0.5 - Math.random())
         .slice(0, BATCH_SIZE)
 
