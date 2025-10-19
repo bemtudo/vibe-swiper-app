@@ -51,47 +51,46 @@ const ResultsView = ({ user }: { user: any }) => {
 
   if (loading) {
     return (
-      <div className="text-center p-8">
+      <div className="text-center p-8 text-gray-600">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-        <p className="text-gray-600">Loading your liked names...</p>
+        Loading your favorite VIBES...
       </div>
     )
   }
 
   return (
-    <div className="max-w-xl mx-auto p-6">
-      <h2 className="text-3xl font-bold mb-6 text-gray-800 text-center">
+    <div className="max-w-4xl mx-auto p-6">
+      <h2 className="text-3xl font-bold mb-6 text-gray-800 border-b pb-2">
         Your Favorite VIBES ({likedNames.length})
       </h2>
       
       {likedNames.length === 0 ? (
-        <div className="p-6 bg-yellow-100 border-l-4 border-yellow-500 rounded-lg text-center">
-          <p className="text-gray-700 text-lg">
-            You haven't swiped LIKE on any names yet! 
-          </p>
-          <p className="text-gray-600 mt-2">
-            Get swiping to build your list of favorite names.
-          </p>
+        <div className="p-8 bg-pink-50 border-l-4 border-pink-400 rounded-xl text-center shadow-lg">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-pink-500 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+          </svg>
+          <p className="text-gray-700 font-semibold">No likes yet!</p>
+          <p className="text-sm text-gray-500 mt-1">Head back to the Swiper to start building your list.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {likedNames.map((name, index) => (
-            <div key={index} className="p-6 bg-white rounded-xl shadow-lg border-l-4 border-green-500 hover:shadow-xl transition-shadow">
-              <h3 className="text-2xl font-bold text-gray-900 mb-2">{name.name}</h3>
-              <p className="text-lg text-gray-600 mb-1">
-                <span className="text-blue-500 mr-2">/</span>
-                {name.easy_pronunciation}
-                <span className="text-blue-500 ml-2">/</span>
+            // Card design updated for cleaner, minimalist, match-list aesthetic
+            <div key={index} className="p-4 bg-white rounded-xl shadow-lg border-2 border-green-200 transition hover:shadow-xl">
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="text-2xl font-extrabold text-gray-900">{name.name}</h3>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <p className="text-sm font-medium text-gray-600">
+                / {name.easy_pronunciation} /
               </p>
-              <p className="text-sm text-gray-600 mb-1">
-                <span className="font-semibold">Pool:</span> {name.name_set}
-              </p>
-              <p className="text-sm text-gray-600 mb-1">
-                <span className="font-semibold">Origin:</span> {name.origin}
-              </p>
-              <p className="text-sm text-gray-500 italic">
-                <span className="font-semibold">Meaning:</span> {name.meaning}
-              </p>
+              <div className="mt-3 space-y-1">
+                <p className="text-xs text-gray-500"><span className="font-semibold text-gray-700">Origin:</span> {name.origin}</p>
+                <p className="text-xs text-gray-500"><span className="font-semibold text-gray-700">Pool:</span> {name.name_set}</p>
+                <p className="text-xs text-gray-500 italic">Meaning: {name.meaning}</p>
+              </div>
             </div>
           ))}
         </div>
