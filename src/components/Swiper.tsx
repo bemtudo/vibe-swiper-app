@@ -3,13 +3,14 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase' // Using the client exported from lib/supabase
+import { FaHeart, FaTimes, FaChevronDown } from 'react-icons/fa' // Ensure you have react-icons installed
 
 // Define the Name type based on our male_names table schema
 type Name = {
-  // 🚨 FIX: Renamed 'id' to 'uuid_id' to match the database schema
+  // CRITICAL FIX: Use 'uuid_id' to match the database schema
   uuid_id: string 
   name: string
-  name_set: 'English' | 'Turkish' | 'International' // Name set is now only used for display/logging
+  name_set: 'English' | 'Turkish' | 'International' 
   origin: string
   meaning: string
   easy_pronunciation: string
@@ -20,21 +21,35 @@ type SwiperProps = {
   user: User // Passed from app/page.tsx
 }
 
-// Removed POOLS and BATCH_SIZE remains the same
 const BATCH_SIZE = 20 // Number of names to fetch at once
 
+// Utility function to shuffle an array
+const shuffleArray = <T extends any>(array: T[]): T[] => {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+  return array;
+}
+
 export default function Swiper({ user }: SwiperProps) {
-  // Removed activePool state, as we are now loading all names randomly
   const [namesQueue, setNamesQueue] = useState<Name[]>([])
   const [currentName, setCurrentName] = useState<Name | null>(null)
   const [loading, setLoading] = useState(false)
   const [statusMessage, setStatusMessage] = useState<string>('')
+  
+  // NOTE: This component no longer uses external state for the user profile 
+  // but relies solely on the 'user' prop from the parent, which is enough 
+  // for the core swipe functionality.
 
   // ------------------------------------------------
-  // 1. DATA FETCHING (Safest Exclusion Logic)
+  // 1. DATA FETCHING (Randomized and Exclusion Logic)
   // ------------------------------------------------
 
   const fetchNames = useCallback(async () => {
+    // Only fetch if the queue is low
+    if (loading || namesQueue.length > 5) return;
+    
     setLoading(true)
     setStatusMessage(`Loading a batch of new names...`)
 
@@ -42,65 +57,72 @@ export default function Swiper({ user }: SwiperProps) {
       // --- STEP 1: Fetch IDs of ALL names already swiped by the current user ---
       const { data: swipedData, error: swipedError } = await supabase
         .from('user_swipes')
-        .select('name_id')
+        // CRITICAL FIX: Select the UUID column for filtering
+        .select('name_id') 
         .eq('user_id', user.id)
 
       if (swipedError) throw swipedError
 
-      // Extract the array of name IDs to exclude
+      // Extract the array of name UUIDs to exclude
       const excludedIds = swipedData.map(swipe => swipe.name_id)
       
       setStatusMessage(`Found ${excludedIds.length} names already swiped. Fetching new names...`)
 
-      // --- STEP 2: Dynamically build the fetch query ---
-      let query = supabase
+      // --- STEP 2: Fetch ALL names and filter client-side (simpler approach) ---
+      const { data: nameData, error: nameError } = await supabase
         .from('male_names')
-        // 🚨 FIX: Request all columns, including the correct UUID column: uuid_id
-        .select('uuid_id, name, name_set, origin, meaning, easy_pronunciation, vibe_score') 
-
-      // 🚨 CRITICAL FIX: Use 'uuid_id' in the exclusion filter
-      if (excludedIds.length > 0) {
-        query = query.not('uuid_id', 'in', excludedIds)
-      }
-      
-      // Complete the query with limits and execute
-      const { data: nameData, error: nameError } = await query.limit(BATCH_SIZE * 2)
+        .select('uuid_id, name, name_set, origin, meaning, easy_pronunciation, vibe_score')
+        .limit(200) // Fetch a reasonable batch size
 
       if (nameError) throw nameError
       
+      // Filter out already swiped names client-side
+      const unswipedNames = (nameData as Name[]).filter(
+        name => !excludedIds.includes(name.uuid_id)
+      )
+      
       // Randomize and limit the batch
-      const shuffledNames = (nameData as Name[]) 
-        .sort(() => 0.5 - Math.random())
-        .slice(0, BATCH_SIZE)
+      const shuffledNames = shuffleArray(unswipedNames).slice(0, BATCH_SIZE)
 
       if (shuffledNames.length === 0) {
         setStatusMessage(
-          excludedIds.length > 0 && excludedIds.length === swipedData.length 
-            ? `You've swiped all available names! 🎉 Start a new account or reset your swipes to see them again.`
-            : `No available names found.`
+          excludedIds.length > 0
+            ? `You've swiped all available names! Check back later.`
+            : `No available names found in the database.`
         )
         setCurrentName(null)
       } else {
-        setNamesQueue(shuffledNames.slice(1)) 
-        setCurrentName(shuffledNames[0]) 
-        setStatusMessage(`Loaded ${shuffledNames.length} new names for you.`)
+        setNamesQueue(prevQueue => {
+            // Filter out any duplicates that might already be in the queue 
+            // (shouldn't happen with proper exclusion, but safer to check)
+            const uniqueNewNames = shuffledNames.filter(
+                newName => !prevQueue.some(queuedName => queuedName.uuid_id === newName.uuid_id)
+            )
+            return [...prevQueue, ...uniqueNewNames]
+        })
+        setStatusMessage(`Loaded ${shuffledNames.length} new random names.`)
       }
     } catch (e: any) {
-      // Log the full error object for better debugging visibility
-      console.error('Fetch Error (400 likely here):', e)
-      setStatusMessage(`Error fetching names: ${e.message}. Check console for details.`)
+      console.error('Fetch Error:', e)
+      setStatusMessage(`Error fetching names: ${e.message}.`)
     } finally {
       setLoading(false)
     }
-  }, [user.id]) // Only re-create fetchNames if user.id changes
+  }, [user.id, loading, namesQueue.length])
 
-  // Effect to load names when the component mounts or user changes
+  // Effect to manage the current name and trigger the next fetch
   useEffect(() => {
-    // Only fetch if a user is available 
-    if (user.id) {
-      fetchNames() // No longer takes a 'pool' argument
+    // 1. Set the first name if the queue has loaded
+    if (!currentName && namesQueue.length > 0) {
+      setCurrentName(namesQueue[0])
+      setNamesQueue(prevQueue => prevQueue.slice(1))
+    } 
+    
+    // 2. Trigger the next fetch if the queue is low
+    if (namesQueue.length < 5 && !loading) {
+        fetchNames();
     }
-  }, [fetchNames, user.id])
+  }, [namesQueue, currentName, loading, fetchNames])
 
   // ------------------------------------------------
   // 2. SWIPE LOGIC (Write Operation)
@@ -112,36 +134,29 @@ export default function Swiper({ user }: SwiperProps) {
 
     const nameToSwipe = currentName
     
-    // Optimistic UI Update
-    const nextName = namesQueue.shift() || null
+    // 1. Optimistic UI Update: Move to the next name
+    const nextName = namesQueue[0] || null
     setCurrentName(nextName)
-    setNamesQueue([...namesQueue]) 
+    setNamesQueue(prevQueue => prevQueue.slice(1)) 
 
-    // Database Write Operation
+    // 2. Database Write Operation
     const { error } = await supabase
       .from('user_swipes')
       .insert({
         user_id: user.id,
-        name_id: nameToSwipe.uuid_id, // Use UUID directly
+        name_id: nameToSwipe.uuid_id, // CRITICAL: Use UUID directly
         swipe_action: action,
-        // pool_used is necessary for RLS/data tracking, use the name's own set
         pool_used: nameToSwipe.name_set, 
       })
-      .select() 
 
     if (error) {
       console.error(`Swipe Error (${action}):`, error)
       setStatusMessage(`Error recording swipe: ${error.message}`)
     } else {
-      setStatusMessage(action === 'LIKE' ? `${nameToSwipe.name} LIKED! 🎉` : `${nameToSwipe.name} DISLIKED.`)
+      setStatusMessage(action === 'LIKE' ? `${nameToSwipe.name} LIKED! ❤️` : `${nameToSwipe.name} DISLIKED.`)
     }
 
     setLoading(false) 
-
-    // If queue is now empty and not already loading, trigger a new fetch
-    if (!nextName && !loading) {
-      setTimeout(() => fetchNames(), 500); 
-    }
   }
   
   const handleLike = () => handleSwipe('LIKE')
@@ -152,81 +167,76 @@ export default function Swiper({ user }: SwiperProps) {
   // ------------------------------------------------
 
   return (
-    <div className="max-w-xl mx-auto p-6 bg-white rounded-xl shadow-2xl">
+    <div className="flex flex-col h-full w-full max-w-sm mx-auto p-4">
       
-      {/* Pool Selector was removed to ensure random swiping */}
-
       {/* Status Message */}
-      <div className={`text-center mb-4 text-sm font-medium ${statusMessage.includes('Error') ? 'text-red-500' : 'text-green-600'}`}>
+      <div className={`text-center mb-4 text-sm font-medium h-6 ${statusMessage.includes('Error') ? 'text-red-500' : 'text-green-600'}`}>
         {statusMessage}
       </div>
 
-      {/* Swiping Card */}
+      {/* Conditional Content */}
       {(loading && !currentName) || !user.id ? (
-        <div className="flex justify-center items-center h-64 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-          <p className="text-gray-500">
+        <div className="flex flex-col items-center justify-center h-96 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
+          <FaChevronDown className="animate-bounce text-4xl mb-4 text-gray-400" />
+          <p className="text-lg font-semibold text-gray-500">
             {user.id ? "Loading names..." : "Please sign in to start swiping."}
           </p>
         </div>
       ) : currentName ? (
-        <div className="bg-gradient-to-br from-indigo-50 to-blue-100 p-8 rounded-2xl shadow-xl border-t-4 border-blue-500 transform transition-all duration-500">
-          <div className="text-center mb-6">
-            <h2 className="text-5xl font-extrabold text-gray-900 mb-2">{currentName.name}</h2>
-            <p className="text-xl text-gray-600 font-semibold">
-              <span className="text-blue-500 mr-2">/</span>
-              {currentName.easy_pronunciation}
-              <span className="text-blue-500 ml-2">/</span>
+        <div className="flex-1 bg-white rounded-xl shadow-2xl p-6 flex flex-col justify-between mb-8 transform transition-transform duration-300 ease-out border-t-4 border-blue-500">
+          <div className="text-center">
+            <p className="text-lg font-light text-gray-500 uppercase tracking-widest">
+              {currentName.origin} Name
             </p>
-            {/* Pool Label - Now purely informational */}
-            <div className="mt-2">
-              <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
+            <h2 className="text-6xl font-extrabold text-gray-800 my-8">
+              {currentName.name}
+            </h2>
+            <div className="text-gray-600 space-y-2">
+              <p className="text-xl font-semibold">{currentName.meaning}</p>
+              <p className="text-md font-light italic">
+                Pronunciation: /{currentName.easy_pronunciation}/
+              </p>
+               <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
                 currentName.name_set === 'English' ? 'bg-green-100 text-green-800' :
                 currentName.name_set === 'Turkish' ? 'bg-red-100 text-red-800' :
                 'bg-blue-100 text-blue-800'
               }`}>
-                {currentName.name_set} Name
+                {currentName.name_set} Pool
               </span>
             </div>
           </div>
-          
-          <div className="space-y-2 text-center text-gray-700">
-            <p className="text-sm font-light italic">
-              Origin: {currentName.origin}
-            </p>
-            <p className="text-sm font-light italic">
-              Meaning: {currentName.meaning || 'N/A'}
-            </p>
-          </div>
-          
-          {/* Action Buttons */}
-          <div className="flex justify-around mt-8 space-x-4">
-            <button
-              onClick={handleDislike}
-              disabled={loading}
-              className="flex items-center justify-center w-full p-3 text-red-600 border-2 border-red-600 rounded-full font-bold uppercase transition duration-200 hover:bg-red-50 hover:shadow-lg disabled:opacity-50"
-              aria-label="Dislike Name"
-            >
-              Skip
-            </button>
-            <button
-              onClick={handleLike}
-              disabled={loading}
-              className="flex items-center justify-center w-full p-3 bg-green-500 text-white rounded-full font-bold uppercase shadow-md transition duration-200 hover:bg-green-600 hover:shadow-lg disabled:opacity-50"
-              aria-label="Like Name"
-            >
-              VIBE
-            </button>
-          </div>
         </div>
       ) : (
-        <div className="text-center p-8 bg-yellow-50 border-l-4 border-yellow-500 rounded-lg">
+        <div className="text-center p-8 bg-yellow-50 border-l-4 border-yellow-500 rounded-lg h-96 flex flex-col justify-center">
           <h3 className="text-2xl font-semibold text-gray-800">All Done!</h3>
           <p className="mt-2 text-grayis-600">
-            You have swiped all available names! Start a new account or reset your swipes to see them again.
+            You have swiped all available names!
           </p>
         </div>
       )}
 
+      {/* Control Buttons */}
+      {currentName && (
+        <div className="flex justify-around space-x-4">
+          <button
+            onClick={handleDislike}
+            disabled={loading}
+            className="flex items-center justify-center p-4 w-1/2 rounded-full bg-red-500 hover:bg-red-600 text-white shadow-lg transition duration-150 ease-in-out transform hover:scale-105 disabled:opacity-50"
+            aria-label="Skip Name"
+          >
+            <FaTimes className="text-3xl mr-2" /> Skip
+          </button>
+          <button
+            onClick={handleLike}
+            disabled={loading}
+            className="flex items-center justify-center p-4 w-1/2 rounded-full bg-green-500 hover:bg-green-600 text-white shadow-lg transition duration-150 ease-in-out transform hover:scale-105 disabled:opacity-50"
+            aria-label="Like Name"
+          >
+            <FaHeart className="text-3xl mr-2" /> VIBE
+          </button>
+        </div>
+      )}
+      
       <div className="mt-4 text-xs text-center text-gray-400">
           {namesQueue.length} names left in queue.
       </div>
