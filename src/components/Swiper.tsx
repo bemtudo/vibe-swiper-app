@@ -6,7 +6,8 @@ import { supabase } from '@/lib/supabase' // Using the client exported from lib/
 
 // Define the Name type based on our male_names table schema
 type Name = {
-  id: number  // Changed from string to number to match int4 database type
+  id: number  // Keep the integer id for now
+  uuid_id: string  // Use UUID for database operations
   name: string
   name_set: 'English' | 'Turkish' | 'International' // Name set is now only used for display/logging
   origin: string
@@ -38,7 +39,7 @@ export default function Swiper({ user }: SwiperProps) {
     setStatusMessage(`Loading a batch of new names...`)
 
     try {
-      // --- STEP 1: Fetch IDs of ALL names already swiped by the current user ---
+      // --- STEP 1: Fetch UUID IDs of ALL names already swiped by the current user ---
       const { data: swipedData, error: swipedError } = await supabase
         .from('user_swipes')
         .select('name_id')
@@ -46,7 +47,7 @@ export default function Swiper({ user }: SwiperProps) {
 
       if (swipedError) throw swipedError
 
-      // Extract the array of name IDs to exclude
+      // Extract the array of UUID IDs to exclude
       const excludedIds = swipedData.map(swipe => swipe.name_id)
       
       setStatusMessage(`Found ${excludedIds.length} names already swiped. Fetching new names...`)
@@ -56,10 +57,9 @@ export default function Swiper({ user }: SwiperProps) {
         .from('male_names')
         .select('*')
 
-      // 🚨 CRITICAL FIX: Only apply the exclusion filter if there are IDs to exclude.
+      // 🚨 CRITICAL FIX: Only apply the exclusion filter if there are UUIDs to exclude.
       if (excludedIds.length > 0) {
-        // If excludedIds is large, it can cause URL length issues, but for 75-1250 names it should be fine.
-        query = query.not('id', 'in', excludedIds)
+        query = query.not('uuid_id', 'in', excludedIds)
       }
       
       // Complete the query with limits and execute
@@ -121,7 +121,7 @@ export default function Swiper({ user }: SwiperProps) {
       .from('user_swipes')
       .insert({
         user_id: user.id,
-        name_id: nameToSwipe.id.toString(), // Convert integer to string for UUID field
+        name_id: nameToSwipe.uuid_id, // Use UUID directly
         swipe_action: action,
         // pool_used is necessary for RLS/data tracking, use the name's own set
         pool_used: nameToSwipe.name_set, 

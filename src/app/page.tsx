@@ -29,12 +29,12 @@ const ResultsView = ({ user }: { user: any }) => {
           return;
         }
 
-        // Step 2: Get name details from male_names using the IDs
-        const nameIds = swipeData.map(s => parseInt(s.name_id)); // Convert back to integers
+        // Step 2: Get name details from male_names using the UUID IDs
+        const nameIds = swipeData.map(s => s.name_id); // Use UUID strings directly
         const { data: nameData, error: nameError } = await supabase
           .from('male_names')
           .select('*')
-          .in('id', nameIds)
+          .in('uuid_id', nameIds)
 
         if (nameError) throw nameError
 
