@@ -32,7 +32,7 @@ export default function Swiper({ user }: SwiperProps) {
   const [statusMessage, setStatusMessage] = useState<string>('')
 
   // ------------------------------------------------
-  // 1. DATA FETCHING (with Efficient Exclusion Logic and Pool Filter)
+  // 1. DATA FETCHING (Fixed Two-Step Exclusion Logic)
   // ------------------------------------------------
 
   const fetchNames = useCallback(async (pool: Name['name_set']) => {
@@ -40,60 +40,73 @@ export default function Swiper({ user }: SwiperProps) {
     setStatusMessage(`Loading batch of ${pool} names...`)
 
     try {
-      // Step 1: Get all names from the selected pool
-      const { data: allNames, error: namesError } = await supabase
-        .from('male_names')
-        .select('*')
-        .eq('name_set', pool)
-        .limit(BATCH_SIZE * 3) // Fetch more to account for filtering
-      
-      if (namesError) throw namesError
-
-      // Step 2: Get user's swiped names for this pool
+      // --- STEP 1: Fetch IDs of names already swiped by the current user in this pool ---
       const { data: swipedData, error: swipedError } = await supabase
         .from('user_swipes')
         .select('name_id')
         .eq('user_id', user.id)
         .eq('pool_used', pool)
-      
+
       if (swipedError) throw swipedError
 
-      // Step 3: Filter out swiped names client-side
-      const swipedIds = new Set(swipedData?.map(s => s.name_id) || [])
-      const availableNames = (allNames as Name[]).filter(name => !swipedIds.has(name.id))
+      // Extract the array of name IDs to exclude
+      const excludedIds = swipedData.map(swipe => swipe.name_id)
+      
+      setStatusMessage(`Found ${excludedIds.length} names already swiped. Fetching new names...`)
 
+      // --- STEP 2: Fetch names, excluding those IDs ---
+      const { data: nameData, error: nameError } = await supabase
+        .from('male_names')
+        .select('*')
+        .eq('name_set', pool) // Filter by the active pool
+        // Use .in and negate it with .not for exclusion
+        // If excludedIds is empty, this filter is effectively ignored.
+        .not('id', 'in', excludedIds.length > 0 ? excludedIds : ['']) // Use [''] if array is empty to prevent query issues
+        .limit(BATCH_SIZE * 2) // Fetch a larger pool for client-side shuffling
+      
+      if (nameError) throw nameError
+      
       // Randomize and limit the batch
-      const shuffledNames = availableNames
+      const shuffledNames = (nameData as Name[]) 
         .sort(() => 0.5 - Math.random())
         .slice(0, BATCH_SIZE)
 
       if (shuffledNames.length === 0) {
-        setStatusMessage(`You've swiped all available names in the ${pool} pool! 🎉`)
+        setStatusMessage(
+          excludedIds.length > 0 && excludedIds.length === swipedData.length 
+            ? `You've swiped all available names in the ${pool} pool! 🎉`
+            : `No available names found in the ${pool} pool.`
+        )
         setCurrentName(null)
       } else {
         setNamesQueue(shuffledNames.slice(1)) 
         setCurrentName(shuffledNames[0]) 
-        setStatusMessage(`Loaded ${shuffledNames.length} names from the ${pool} pool.`)
+        setStatusMessage(`Loaded ${shuffledNames.length} new names from the ${pool} pool.`)
       }
     } catch (e: any) {
+      // Log the full error object for better debugging visibility
       console.error('Fetch Error:', e)
-      setStatusMessage(`Error fetching names: ${e.message}`)
+      setStatusMessage(`Error fetching names: ${e.message}. Check console for details.`)
     } finally {
       setLoading(false)
     }
-  }, [user.id])
+  }, [user.id]) // Only re-create fetchNames if user.id changes
 
   // Effect to load names when the pool changes or component mounts
   useEffect(() => {
-    fetchNames(activePool)
-  }, [activePool, fetchNames])
+    // Only fetch if a user is available (Auth is handled in page.tsx)
+    if (user.id) {
+      fetchNames(activePool)
+    }
+  }, [activePool, fetchNames, user.id])
 
   // ------------------------------------------------
   // 2. SWIPE LOGIC (Write Operation)
   // ------------------------------------------------
   
   const handleSwipe = async (action: 'LIKE' | 'DISLIKE') => {
-    if (!currentName) return
+    if (!currentName || loading) return
+    setLoading(true) // Prevent double-swipe while processing
 
     const nameToSwipe = currentName
     
@@ -111,17 +124,22 @@ export default function Swiper({ user }: SwiperProps) {
         swipe_action: action,
         pool_used: nameToSwipe.name_set,
       })
+      .select() // Ensure we get a response to confirm success
 
     if (error) {
       console.error(`Swipe Error (${action}):`, error)
       setStatusMessage(`Error recording swipe: ${error.message}`)
+      // Note: In a real app, you would revert the optimistic UI update here
     } else {
       setStatusMessage(action === 'LIKE' ? `${nameToSwipe.name} LIKED! 🎉` : `${nameToSwipe.name} DISLIKED.`)
     }
 
-    // If queue is now empty, trigger a new fetch
+    setLoading(false) // Allow new swipes/fetches
+
+    // If queue is now empty and not already loading, trigger a new fetch
     if (!nextName && !loading) {
-      fetchNames(activePool)
+      // Small delay to ensure the DB write propagates, though RLS should handle it.
+      setTimeout(() => fetchNames(activePool), 500); 
     }
   }
   
@@ -141,7 +159,7 @@ export default function Swiper({ user }: SwiperProps) {
           <button
             key={pool}
             onClick={() => {
-              if (!loading) {
+              if (!loading && activePool !== pool) {
                 setCurrentName(null)
                 setNamesQueue([])
                 setActivePool(pool)
@@ -165,9 +183,11 @@ export default function Swiper({ user }: SwiperProps) {
       </div>
 
       {/* Swiping Card */}
-      {loading && !currentName ? (
+      {(loading && !currentName) || !user.id ? (
         <div className="flex justify-center items-center h-64 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-          <p className="text-gray-500">Loading names...</p>
+          <p className="text-gray-500">
+            {user.id ? "Loading names..." : "Please sign in to start swiping."}
+          </p>
         </div>
       ) : currentName ? (
         <div className="bg-gradient-to-br from-indigo-50 to-blue-100 p-8 rounded-2xl shadow-xl border-t-4 border-blue-500 transform transition-all duration-500">
