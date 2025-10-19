@@ -52,8 +52,10 @@ export default function Swiper({ user }: SwiperProps) {
     
     setLoading(true)
     setStatusMessage(`Loading a batch of new names...`)
+    console.log('🔍 Starting fetchNames...')
 
     try {
+      console.log('📊 Step 1: Fetching user swipes for user:', user.id)
       // --- STEP 1: Fetch IDs of ALL names already swiped by the current user ---
       const { data: swipedData, error: swipedError } = await supabase
         .from('user_swipes')
@@ -61,30 +63,42 @@ export default function Swiper({ user }: SwiperProps) {
         .select('name_id') 
         .eq('user_id', user.id)
 
-      if (swipedError) throw swipedError
+      if (swipedError) {
+        console.error('❌ Swiped data error:', swipedError)
+        throw swipedError
+      }
 
       // Extract the array of name UUIDs to exclude
-      const excludedIds = swipedData.map(swipe => swipe.name_id)
-      
+      const excludedIds = swipedData?.map(swipe => swipe.name_id) || []
+      console.log('📝 Found swiped names:', excludedIds.length)
       setStatusMessage(`Found ${excludedIds.length} names already swiped. Fetching new names...`)
 
+      console.log('📊 Step 2: Fetching all names from male_names table')
       // --- STEP 2: Fetch ALL names and filter client-side (simpler approach) ---
       const { data: nameData, error: nameError } = await supabase
         .from('male_names')
         .select('uuid_id, name, name_set, origin, meaning, easy_pronunciation, vibe_score')
         .limit(200) // Fetch a reasonable batch size
 
-      if (nameError) throw nameError
+      if (nameError) {
+        console.error('❌ Name data error:', nameError)
+        throw nameError
+      }
+      
+      console.log('📝 Fetched names from database:', nameData?.length || 0)
       
       // Filter out already swiped names client-side
       const unswipedNames = (nameData as Name[]).filter(
         name => !excludedIds.includes(name.uuid_id)
       )
       
+      console.log('📝 After filtering swiped names:', unswipedNames.length)
+      
       // Randomize and limit the batch
       const shuffledNames = shuffleArray(unswipedNames).slice(0, BATCH_SIZE)
 
       if (shuffledNames.length === 0) {
+        console.log('⚠️ No names available after filtering')
         setStatusMessage(
           excludedIds.length > 0
             ? `You've swiped all available names! Check back later.`
@@ -92,6 +106,7 @@ export default function Swiper({ user }: SwiperProps) {
         )
         setCurrentName(null)
       } else {
+        console.log('✅ Successfully loaded names:', shuffledNames.length)
         setNamesQueue(prevQueue => {
             // Filter out any duplicates that might already be in the queue 
             // (shouldn't happen with proper exclusion, but safer to check)
@@ -103,11 +118,12 @@ export default function Swiper({ user }: SwiperProps) {
         setStatusMessage(`Loaded ${shuffledNames.length} new random names.`)
       }
     } catch (e: any) {
-      console.error('Fetch Error:', e)
-      console.error('Full error details:', e)
+      console.error('❌ Fetch Error:', e)
+      console.error('❌ Full error details:', e)
       setStatusMessage(`Error fetching names: ${e.message}. Check console for details.`)
     } finally {
       setLoading(false)
+      console.log('🏁 fetchNames completed')
     }
   }, [user.id, loading, namesQueue.length])
 
