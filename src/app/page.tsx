@@ -3,10 +3,10 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import AuthForm from '@/components/AuthForm'
-import Swiper from '@/components/Swiper'
+import Swiper from '@/components/Swiper' // Now imports the fixed Swiper logic
 
 // ------------------------------------------------
-// Results View Component
+// Results View Component (Embedded)
 // ------------------------------------------------
 const ResultsView = ({ user }: { user: any }) => {
   const [likedNames, setLikedNames] = useState<any[]>([])
@@ -15,38 +15,24 @@ const ResultsView = ({ user }: { user: any }) => {
   useEffect(() => {
     const fetchLikedNames = async () => {
       try {
-        // First, get user's liked names
+        // Query to join user_swipes (to get liked names) with male_names (to get details)
         const { data: swipeData, error: swipeError } = await supabase
           .from('user_swipes')
-          .select('name_id')
-          .eq('user_id', user.id)
+          .select(`
+            name_id,
+            name_data:male_names (name, origin, meaning, name_set, easy_pronunciation)
+          `)
+          .eq('user_id', user.id) 
           .eq('swipe_action', 'LIKE')
 
-        if (swipeError) {
-          console.error('Error fetching user swipes:', swipeError)
-          return
-        }
+        if (swipeError) throw swipeError
 
-        if (!swipeData || swipeData.length === 0) {
-          setLikedNames([])
-          setLoading(false)
-          return
-        }
+        // Flatten the data for easier rendering
+        const names = swipeData?.map(d => ({ ...d.name_data, name_id: d.name_id })) || []
+        setLikedNames(names);
 
-        // Then, get the actual name details
-        const nameIds = swipeData.map(s => s.name_id)
-        const { data: nameData, error: nameError } = await supabase
-          .from('male_names')
-          .select('*')
-          .in('id', nameIds)
-
-        if (nameError) {
-          console.error('Error fetching names:', nameError)
-        } else {
-          setLikedNames(nameData || [])
-        }
       } catch (err) {
-        console.error('Error:', err)
+        console.error('Error fetching liked names:', err)
       } finally {
         setLoading(false)
       }
@@ -83,7 +69,7 @@ const ResultsView = ({ user }: { user: any }) => {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {likedNames.map((name, index) => (
-            // Card design updated for cleaner, minimalist, match-list aesthetic
+            // Match list card design
             <div key={index} className="p-4 bg-white rounded-xl shadow-lg border-2 border-green-200 transition hover:shadow-xl">
               <div className="flex justify-between items-center mb-2">
                 <h3 className="text-2xl font-extrabold text-gray-900">{name.name}</h3>
@@ -108,7 +94,7 @@ const ResultsView = ({ user }: { user: any }) => {
 }
 
 // ------------------------------------------------
-// Sign Out Button Component
+// Sign Out Button Component (Embedded)
 // ------------------------------------------------
 const SignOutButton = () => {
   const handleSignOut = async () => {
@@ -133,34 +119,23 @@ export default function Home() {
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<'swiper' | 'results'>('swiper')
   
-  // FORCE DEPLOYMENT TEST - This should trigger a complete rebuild
-
   useEffect(() => {
-    // Handle email confirmation redirects
-    const handleAuthRedirect = async () => {
-      const { data, error } = await supabase.auth.getSession()
-      if (data.session) {
-        setUser(data.session.user)
-      }
-      setLoading(false)
-    }
-
-    // Get current user
-    const getUser = async () => {
+    // Get current user and listen for auth changes
+    const fetchUser = async () => {
       const { data: { session } } = await supabase.auth.getSession()
       setUser(session?.user)
       setLoading(false)
     }
-    getUser()
+    fetchUser()
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         setUser(session?.user)
         setLoading(false)
+        // If the user logs out, reset the view to swiper
+        if (event === 'SIGNED_OUT') setView('swiper') 
       }
     )
-
     return () => subscription.unsubscribe()
   }, [])
 
@@ -169,16 +144,16 @@ export default function Home() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
+          <p className="text-gray-600">Loading authentication...</p>
         </div>
       </div>
     )
   }
 
   if (!user) {
+    // Show AuthForm when not logged in
     return (
       <div className="min-h-screen bg-gray-50">
-        {/* Header */}
         <div className="bg-white shadow-sm">
           <div className="max-w-md mx-auto px-4 py-6">
             <div className="text-center">
@@ -187,8 +162,6 @@ export default function Home() {
             </div>
           </div>
         </div>
-
-        {/* Authentication Form */}
         <div className="max-w-md mx-auto px-4 py-8">
           <AuthForm />
         </div>
@@ -196,15 +169,15 @@ export default function Home() {
     )
   }
 
+  // Logged-in user view: Header + Navigation + Content
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header with Navigation */}
-      <div className="bg-white shadow-sm">
+      <div className="bg-white shadow-sm sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-6">
           <div className="flex justify-between items-center">
-            <div className="text-center flex-1">
+            <div className="flex-shrink-0">
               <h1 className="text-3xl font-bold text-gray-900">Vibe Swiper</h1>
-              <p className="mt-2 text-gray-600">Find the perfect baby name</p>
               <p className="mt-1 text-sm text-gray-500">Welcome, {user.email}</p>
             </div>
             <div className="flex space-x-4 items-center">
@@ -234,13 +207,11 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Main Content - Updated */}
+      {/* Main Content Area */}
       <div className="px-4 py-8">
         {view === 'swiper' && (
-          <div>
-            <div className="text-center mb-4 text-red-600 text-2xl font-bold">
-              🚨 DEBUG TEST - IF YOU SEE THIS, THE CODE IS UPDATED! 🚨
-            </div>
+          <div className="text-center">
+            {/* DEBUG MESSAGE REMOVED - The code itself is the test now */}
             <Swiper user={user} />
           </div>
         )}

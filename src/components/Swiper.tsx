@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react'
 import { User } from '@supabase/supabase-js'
-import { supabase as supabaseClient } from '@/lib/supabase'
+import { supabase } from '@/lib/supabase' // Using the client exported from lib/supabase
 
 // Define the Name type based on our male_names table schema
 type Name = {
@@ -13,62 +13,61 @@ type Name = {
   meaning: string
   easy_pronunciation: string
   vibe_score?: number
-  // Ensure all columns are fetched
 }
 
 type SwiperProps = {
   user: User // Passed from app/page.tsx
 }
 
+// Define the pools available for selection
 const POOLS: Name['name_set'][] = ['International', 'English', 'Turkish']
 const BATCH_SIZE = 20 // Number of names to fetch at once
 
-export function Swiper({ user }: SwiperProps) {
+export default function Swiper({ user }: SwiperProps) {
+  // Swiper now manages its own active pool state
+  const [activePool, setActivePool] = useState<Name['name_set']>('International')
   const [namesQueue, setNamesQueue] = useState<Name[]>([])
   const [currentName, setCurrentName] = useState<Name | null>(null)
   const [loading, setLoading] = useState(false)
   const [statusMessage, setStatusMessage] = useState<string>('')
 
   // ------------------------------------------------
-  // 1. DATA FETCHING (with Exclusion Logic)
+  // 1. DATA FETCHING (with Efficient Exclusion Logic and Pool Filter)
   // ------------------------------------------------
 
-  const fetchNames = useCallback(async () => {
+  const fetchNames = useCallback(async (pool: Name['name_set']) => {
     setLoading(true)
-    setStatusMessage(`Loading random names from all pools...`)
+    setStatusMessage(`Loading batch of ${pool} names...`)
 
     try {
-      // Get all names from all pools
-      const { data: nameData, error: nameError } = await supabaseClient
-        .from('male_names')
-        .select('*')
-      
-      if (nameError) throw nameError
-
-      // Then, get the user's swiped names
-      const { data: swipedData, error: swipeError } = await supabaseClient
+      // 🚨 FIX: Use subquery exclusion and specific pool filtering (correct implementation from our plan)
+      const subquery = supabase
         .from('user_swipes')
         .select('name_id')
         .eq('user_id', user.id)
-      
-      if (swipeError) throw swipeError
+        .filter('pool_used', 'eq', pool) // Only exclude names swiped in this pool
 
-      // Filter out already swiped names
-      const swipedIds = new Set(swipedData?.map(s => s.name_id) || [])
-      const availableNames = nameData?.filter(name => !swipedIds.has(name.id)) || []
+      const { data: nameData, error: nameError } = await supabase
+        .from('male_names')
+        .select('*')
+        .eq('name_set', pool) // Filter by the active pool
+        .not('id', 'in', subquery) // Exclude swiped names
+        .limit(BATCH_SIZE * 2) // Fetch a larger pool for client-side shuffling
+      
+      if (nameError) throw nameError
 
       // Randomize and limit the batch
-      const shuffledNames = availableNames
+      const shuffledNames = (nameData as Name[]) 
         .sort(() => 0.5 - Math.random())
         .slice(0, BATCH_SIZE)
 
       if (shuffledNames.length === 0) {
-        setStatusMessage(`You've swiped all available names! 🎉`)
+        setStatusMessage(`You've swiped all available names in the ${pool} pool! 🎉`)
         setCurrentName(null)
       } else {
-        setNamesQueue(shuffledNames.slice(1)) // Put the rest in the queue
-        setCurrentName(shuffledNames[0]) // Show the first one immediately
-        setStatusMessage(`Loaded ${shuffledNames.length} random names from all pools.`)
+        setNamesQueue(shuffledNames.slice(1)) 
+        setCurrentName(shuffledNames[0]) 
+        setStatusMessage(`Loaded ${shuffledNames.length} names from the ${pool} pool.`)
       }
     } catch (e: any) {
       console.error('Fetch Error:', e)
@@ -78,10 +77,10 @@ export function Swiper({ user }: SwiperProps) {
     }
   }, [user.id])
 
-  // Effect to load names when the component mounts
+  // Effect to load names when the pool changes or component mounts
   useEffect(() => {
-    fetchNames()
-  }, [fetchNames])
+    fetchNames(activePool)
+  }, [activePool, fetchNames])
 
   // ------------------------------------------------
   // 2. SWIPE LOGIC (Write Operation)
@@ -92,32 +91,31 @@ export function Swiper({ user }: SwiperProps) {
 
     const nameToSwipe = currentName
     
-    // Optimistic UI Update: Move to the next name immediately
+    // Optimistic UI Update
     const nextName = namesQueue.shift() || null
     setCurrentName(nextName)
-    setNamesQueue([...namesQueue]) // Update queue state
+    setNamesQueue([...namesQueue]) 
 
     // Database Write Operation
-    const { error } = await supabaseClient
+    const { error } = await supabase
       .from('user_swipes')
       .insert({
         user_id: user.id,
         name_id: nameToSwipe.id,
         swipe_action: action,
-        pool_used: nameToSwipe.name_set, // Use the name's actual pool
+        pool_used: nameToSwipe.name_set,
       })
 
     if (error) {
       console.error(`Swipe Error (${action}):`, error)
       setStatusMessage(`Error recording swipe: ${error.message}`)
-      // In a real app, you would revert the UI state here
     } else {
       setStatusMessage(action === 'LIKE' ? `${nameToSwipe.name} LIKED! 🎉` : `${nameToSwipe.name} DISLIKED.`)
     }
 
     // If queue is now empty, trigger a new fetch
     if (!nextName && !loading) {
-      fetchNames()
+      fetchNames(activePool)
     }
   }
   
@@ -131,6 +129,29 @@ export function Swiper({ user }: SwiperProps) {
   return (
     <div className="max-w-xl mx-auto p-6 bg-white rounded-xl shadow-2xl">
       
+      {/* Pool Selector */}
+      <div className="flex justify-center space-x-4 mb-6">
+        {POOLS.map(pool => (
+          <button
+            key={pool}
+            onClick={() => {
+              if (!loading) {
+                setCurrentName(null)
+                setNamesQueue([])
+                setActivePool(pool)
+              }
+            }}
+            disabled={loading} 
+            className={`px-4 py-2 text-sm font-medium rounded-full transition duration-150 ${
+              activePool === pool
+                ? 'bg-blue-600 text-white shadow-md'
+                : 'bg-gray-200 text-gray-700 hover:bg-blue-100 disabled:opacity-50'
+            }`}
+          >
+            {pool}
+          </button>
+        ))}
+      </div>
 
       {/* Status Message */}
       <div className={`text-center mb-4 text-sm font-medium ${statusMessage.includes('Error') ? 'text-red-500' : 'text-green-600'}`}>
@@ -195,8 +216,8 @@ export function Swiper({ user }: SwiperProps) {
       ) : (
         <div className="text-center p-8 bg-yellow-50 border-l-4 border-yellow-500 rounded-lg">
           <h3 className="text-2xl font-semibold text-gray-800">All Done!</h3>
-          <p className="mt-2 text-gray-600">
-            You have swiped all available names from all pools! 🎉
+          <p className="mt-2 text-grayis-600">
+            You have swiped all available names in the **{activePool}** pool. Try switching to a different pool!
           </p>
         </div>
       )}
@@ -207,5 +228,3 @@ export function Swiper({ user }: SwiperProps) {
     </div>
   )
 }
-
-export default Swiper
