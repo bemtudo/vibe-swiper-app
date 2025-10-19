@@ -232,7 +232,7 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Main Content */}
+      {/* Main Content - Updated */}
       <div className="px-4 py-8">
         {view === 'swiper' && <Swiper user={user} />}
         {view === 'results' && <ResultsView user={user} />}
