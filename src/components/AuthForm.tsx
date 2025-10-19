@@ -125,36 +125,37 @@ export default function AuthForm() {
               />
             </div>
 
-            {isSignUp && (
-              <div>
-                <label htmlFor="partnerEmail" className="block text-sm font-semibold text-gray-700 mb-2">
-                  Partner's Email <span className="text-gray-400 font-normal">(Optional)</span>
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <FaUserFriends className="text-gray-400" />
-                  </div>
-                  <input
-                    id="partnerEmail"
-                    type="email"
-                    value={partnerEmail}
-                    onChange={(e) => setPartnerEmail(e.target.value)}
-                    className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition"
-                    placeholder="partner@example.com"
-                  />
+            <div>
+              <label htmlFor="partnerEmail" className="block text-sm font-semibold text-gray-700 mb-2">
+                Partner's Email <span className="text-gray-400 font-normal">(Optional)</span>
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <FaUserFriends className="text-gray-400" />
                 </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  Connect with your partner to see mutual favorites
-                </p>
+                <input
+                  id="partnerEmail"
+                  type="email"
+                  value={partnerEmail}
+                  onChange={(e) => setPartnerEmail(e.target.value)}
+                  className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition"
+                  placeholder="partner@example.com"
+                />
               </div>
-            )}
+              <p className="text-xs text-gray-500 mt-1">
+                {isSignUp 
+                  ? "Connect with your partner to see mutual favorites" 
+                  : "Update your partner link to see mutual matches"
+                }
+              </p>
+            </div>
 
             <button
               type="submit"
               disabled={loading}
               className="w-full py-4 px-6 bg-gradient-to-r from-teal-500 to-blue-500 text-white font-bold rounded-xl shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
             >
-              {loading ? 'Loading...' : (isSignUp ? 'Create Account' : 'Sign In')}
+              {loading ? 'Loading...' : (isSignUp ? 'Create Account & Link' : 'Sign In & Update Link')}
             </button>
           </form>
 
