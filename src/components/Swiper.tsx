@@ -47,38 +47,22 @@ export default function Swiper({ user }: SwiperProps) {
   // ------------------------------------------------
 
   const fetchNames = useCallback(async () => {
-    // Only fetch if the queue is low
-    if (loading || namesQueue.length > 5) return;
+    if (loading) {
+      console.log('⏳ Already loading, skipping...')
+      return
+    }
     
     setLoading(true)
-    setStatusMessage(`Loading a batch of new names...`)
+    setStatusMessage(`Loading names...`)
     console.log('🔍 Starting fetchNames...')
 
     try {
-      console.log('📊 Step 1: Fetching user swipes for user:', user.id)
-      // --- STEP 1: Fetch IDs of ALL names already swiped by the current user ---
-      const { data: swipedData, error: swipedError } = await supabase
-        .from('user_swipes')
-        // CRITICAL FIX: Select the UUID column for filtering
-        .select('name_id') 
-        .eq('user_id', user.id)
-
-      if (swipedError) {
-        console.error('❌ Swiped data error:', swipedError)
-        throw swipedError
-      }
-
-      // Extract the array of name UUIDs to exclude
-      const excludedIds = swipedData?.map(swipe => swipe.name_id) || []
-      console.log('📝 Found swiped names:', excludedIds.length)
-      setStatusMessage(`Found ${excludedIds.length} names already swiped. Fetching new names...`)
-
-      console.log('📊 Step 2: Fetching all names from male_names table')
-      // --- STEP 2: Fetch ALL names and filter client-side (simpler approach) ---
+      console.log('📊 Fetching names from database...')
+      // Simple fetch - get all names and shuffle them
       const { data: nameData, error: nameError } = await supabase
         .from('male_names')
         .select('uuid_id, name, name_set, origin, meaning, easy_pronunciation, vibe_score')
-        .limit(200) // Fetch a reasonable batch size
+        .limit(50) // Fetch a reasonable batch
 
       if (nameError) {
         console.error('❌ Name data error:', nameError)
@@ -87,59 +71,40 @@ export default function Swiper({ user }: SwiperProps) {
       
       console.log('📝 Fetched names from database:', nameData?.length || 0)
       
-      // Filter out already swiped names client-side
-      const unswipedNames = (nameData as Name[]).filter(
-        name => !excludedIds.includes(name.uuid_id)
-      )
-      
-      console.log('📝 After filtering swiped names:', unswipedNames.length)
-      
-      // Randomize and limit the batch
-      const shuffledNames = shuffleArray(unswipedNames).slice(0, BATCH_SIZE)
-
-      if (shuffledNames.length === 0) {
-        console.log('⚠️ No names available after filtering')
-        setStatusMessage(
-          excludedIds.length > 0
-            ? `You've swiped all available names! Check back later.`
-            : `No available names found in the database.`
-        )
-        setCurrentName(null)
-      } else {
+      if (nameData && nameData.length > 0) {
+        // Shuffle and set the queue
+        const shuffledNames = shuffleArray(nameData as Name[])
         console.log('✅ Successfully loaded names:', shuffledNames.length)
-        setNamesQueue(prevQueue => {
-            // Filter out any duplicates that might already be in the queue 
-            // (shouldn't happen with proper exclusion, but safer to check)
-            const uniqueNewNames = shuffledNames.filter(
-                newName => !prevQueue.some(queuedName => queuedName.uuid_id === newName.uuid_id)
-            )
-            return [...prevQueue, ...uniqueNewNames]
-        })
-        setStatusMessage(`Loaded ${shuffledNames.length} new random names.`)
+        setNamesQueue(shuffledNames)
+        setStatusMessage(`Loaded ${shuffledNames.length} names.`)
+      } else {
+        console.log('⚠️ No names found in database')
+        setStatusMessage(`No names found in the database.`)
+        setCurrentName(null)
       }
     } catch (e: any) {
       console.error('❌ Fetch Error:', e)
-      console.error('❌ Full error details:', e)
-      setStatusMessage(`Error fetching names: ${e.message}. Check console for details.`)
+      setStatusMessage(`Error fetching names: ${e.message}`)
     } finally {
       setLoading(false)
       console.log('🏁 fetchNames completed')
     }
-  }, [user.id]) // Simplified dependencies to prevent infinite loop
+  }, [loading]) // Only depend on loading state
 
-  // Effect to manage the current name and trigger the next fetch
+  // Simple effect to trigger initial fetch on mount
   useEffect(() => {
-    // 1. Set the first name if the queue has loaded
+    console.log('🚀 Component mounted, fetching names...')
+    fetchNames()
+  }, []) // Only run once on mount
+
+  // Effect to manage current name from queue
+  useEffect(() => {
     if (!currentName && namesQueue.length > 0) {
+      console.log('📝 Setting current name from queue')
       setCurrentName(namesQueue[0])
       setNamesQueue(prevQueue => prevQueue.slice(1))
-    } 
-    
-    // 2. Trigger the next fetch if the queue is low
-    if (namesQueue.length < 5 && !loading) {
-        fetchNames();
     }
-  }, [namesQueue, currentName, loading]) // Removed fetchNames from dependencies
+  }, [namesQueue, currentName])
 
   // ------------------------------------------------
   // 2. SWIPE LOGIC (Write Operation)
