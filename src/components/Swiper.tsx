@@ -104,7 +104,8 @@ export default function Swiper({ user }: SwiperProps) {
       }
     } catch (e: any) {
       console.error('Fetch Error:', e)
-      setStatusMessage(`Error fetching names: ${e.message}.`)
+      console.error('Full error details:', e)
+      setStatusMessage(`Error fetching names: ${e.message}. Check console for details.`)
     } finally {
       setLoading(false)
     }
