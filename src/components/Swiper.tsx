@@ -125,7 +125,7 @@ export default function Swiper({ user }: SwiperProps) {
       setLoading(false)
       console.log('🏁 fetchNames completed')
     }
-  }, [user.id, loading, namesQueue.length])
+  }, [user.id]) // Simplified dependencies to prevent infinite loop
 
   // Effect to manage the current name and trigger the next fetch
   useEffect(() => {
@@ -139,7 +139,7 @@ export default function Swiper({ user }: SwiperProps) {
     if (namesQueue.length < 5 && !loading) {
         fetchNames();
     }
-  }, [namesQueue, currentName, loading, fetchNames])
+  }, [namesQueue, currentName, loading]) // Removed fetchNames from dependencies
 
   // ------------------------------------------------
   // 2. SWIPE LOGIC (Write Operation)
