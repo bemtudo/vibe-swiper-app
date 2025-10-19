@@ -132,6 +132,8 @@ export default function Home() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<'swiper' | 'results'>('swiper')
+  
+  // FORCE DEPLOYMENT TEST - This should trigger a complete rebuild
 
   useEffect(() => {
     // Handle email confirmation redirects
