@@ -121,7 +121,7 @@ export default function Swiper({ user }: SwiperProps) {
       .from('user_swipes')
       .insert({
         user_id: user.id,
-        name_id: nameToSwipe.id,
+        name_id: nameToSwipe.id.toString(), // Convert integer to string for UUID field
         swipe_action: action,
         // pool_used is necessary for RLS/data tracking, use the name's own set
         pool_used: nameToSwipe.name_set, 
