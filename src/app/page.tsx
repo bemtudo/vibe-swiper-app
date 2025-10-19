@@ -234,7 +234,14 @@ export default function Home() {
 
       {/* Main Content - Updated */}
       <div className="px-4 py-8">
-        {view === 'swiper' && <Swiper user={user} />}
+        {view === 'swiper' && (
+          <div>
+            <div className="text-center mb-4 text-green-600">
+              DEBUG: Swiper component should render here
+            </div>
+            <Swiper user={user} />
+          </div>
+        )}
         {view === 'results' && <ResultsView user={user} />}
       </div>
     </div>
