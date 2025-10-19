@@ -14,7 +14,7 @@ export default function AuthForm() {
   const [isSignUp, setIsSignUp] = useState(false)
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
-  const [user, setUser] = useState(null)
+  const [user, setUser] = useState<any>(null)
 
   useEffect(() => {
     // Check if user is already logged in
