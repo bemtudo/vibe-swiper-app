@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase' // Using the client exported from lib/
 
 // Define the Name type based on our male_names table schema
 type Name = {
-  id: string
+  id: number  // Changed from string to number to match int4 database type
   name: string
   name_set: 'English' | 'Turkish' | 'International' // Name set is now only used for display/logging
   origin: string
