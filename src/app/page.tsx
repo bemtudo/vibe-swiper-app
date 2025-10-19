@@ -30,16 +30,28 @@ const MatchesView = ({ user }: { user: User }) => {
     setLoading(true)
     
     // 1. Fetch current user's profile to get partner_id
-    const { data: profile } = await supabase
-      .from('user_profiles')
-      .select('partner_id')
-      .eq('id', user.id)
-      .single()
+    try {
+      const { data: profile, error } = await supabase
+        .from('user_profiles')
+        .select('partner_id')
+        .eq('id', user.id)
+        .single()
 
-    const linkedPartnerId = profile?.partner_id
-    setPartnerId(linkedPartnerId)
+      if (error) {
+        console.log('MatchesView: user_profiles query error (normal for new users):', error.message)
+        setLoading(false)
+        return
+      }
 
-    if (!linkedPartnerId) {
+      const linkedPartnerId = profile?.partner_id
+      setPartnerId(linkedPartnerId)
+
+      if (!linkedPartnerId) {
+        setLoading(false)
+        return
+      }
+    } catch (err) {
+      console.log('MatchesView: user_profiles query failed:', err)
       setLoading(false)
       return
     }
@@ -294,14 +306,24 @@ const PartnerLinking = ({ user }: { user: User }) => {
   // Check if user already has a partner linked
   useEffect(() => {
     const checkPartnerStatus = async () => {
-      const { data: profile } = await supabase
-        .from('user_profiles')
-        .select('partner_id, partner_email')
-        .eq('id', user.id)
-        .single()
-      
-      if (profile?.partner_id) {
-        setPartnerLinked(true)
+      try {
+        const { data: profile, error } = await supabase
+          .from('user_profiles')
+          .select('partner_id, partner_email')
+          .eq('id', user.id)
+          .single()
+        
+        if (error) {
+          console.log('Partner status check error (this is normal for new users):', error.message)
+          // Don't set partnerLinked to true if there's an error
+          return
+        }
+        
+        if (profile?.partner_id) {
+          setPartnerLinked(true)
+        }
+      } catch (err) {
+        console.log('Partner status check failed (table might not exist yet):', err)
       }
     }
     checkPartnerStatus()
@@ -323,6 +345,7 @@ const PartnerLinking = ({ user }: { user: User }) => {
         .single()
 
       if (lookupError && lookupError.code !== 'PGRST116') {
+        console.error('Partner lookup error:', lookupError)
         throw new Error('Error looking up partner')
       }
 
@@ -337,7 +360,10 @@ const PartnerLinking = ({ user }: { user: User }) => {
         })
         .eq('id', user.id)
 
-      if (updateError) throw updateError
+      if (updateError) {
+        console.error('Profile update error:', updateError)
+        throw updateError
+      }
 
       // If partner was found, link them back
       if (partnerId) {
@@ -354,6 +380,7 @@ const PartnerLinking = ({ user }: { user: User }) => {
 
       setPartnerEmail('')
     } catch (error: any) {
+      console.error('Partner linking error:', error)
       setMessage(error.message || 'Failed to link partner')
     } finally {
       setLoading(false)
