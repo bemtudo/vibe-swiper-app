@@ -236,8 +236,8 @@ export default function Home() {
       <div className="px-4 py-8">
         {view === 'swiper' && (
           <div>
-            <div className="text-center mb-4 text-green-600">
-              DEBUG: Swiper component should render here
+            <div className="text-center mb-4 text-red-600 text-2xl font-bold">
+              🚨 DEBUG TEST - IF YOU SEE THIS, THE CODE IS UPDATED! 🚨
             </div>
             <Swiper user={user} />
           </div>
