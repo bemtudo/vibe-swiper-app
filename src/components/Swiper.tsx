@@ -40,49 +40,31 @@ export default function Swiper({ user }: SwiperProps) {
     setStatusMessage(`Loading batch of ${pool} names...`)
 
     try {
-      // --- STEP 1: Fetch IDs of names already swiped by the current user in this pool ---
-      const { data: swipedData, error: swipedError } = await supabase
-        .from('user_swipes')
-        .select('name_id')
-        .eq('user_id', user.id)
-        .eq('pool_used', pool)
-
-      if (swipedError) throw swipedError
-
-      // Extract the array of name IDs to exclude
-      const excludedIds = swipedData.map(swipe => swipe.name_id)
-      
-      setStatusMessage(`Found ${excludedIds.length} names already swiped. Fetching new names...`)
-
-      // --- STEP 2: Fetch names, excluding those IDs ---
+      // --- SIMPLIFIED APPROACH: Just fetch names from the pool ---
       const { data: nameData, error: nameError } = await supabase
         .from('male_names')
         .select('*')
-        .eq('name_set', pool) // Filter by the active pool
-        // Use .in and negate it with .not for exclusion
-        // If excludedIds is empty, this filter is effectively ignored.
-        .not('id', 'in', excludedIds.length > 0 ? excludedIds : ['']) // Use [''] if array is empty to prevent query issues
-        .limit(BATCH_SIZE * 2) // Fetch a larger pool for client-side shuffling
+        .eq('name_set', pool)
+        .limit(BATCH_SIZE)
       
-      if (nameError) throw nameError
-      
-      // Randomize and limit the batch
-      const shuffledNames = (nameData as Name[]) 
-        .sort(() => 0.5 - Math.random())
-        .slice(0, BATCH_SIZE)
-
-      if (shuffledNames.length === 0) {
-        setStatusMessage(
-          excludedIds.length > 0 && excludedIds.length === swipedData.length 
-            ? `You've swiped all available names in the ${pool} pool! 🎉`
-            : `No available names found in the ${pool} pool.`
-        )
-        setCurrentName(null)
-      } else {
-        setNamesQueue(shuffledNames.slice(1)) 
-        setCurrentName(shuffledNames[0]) 
-        setStatusMessage(`Loaded ${shuffledNames.length} new names from the ${pool} pool.`)
+      if (nameError) {
+        console.error('Name fetch error:', nameError)
+        throw nameError
       }
+
+      if (!nameData || nameData.length === 0) {
+        setStatusMessage(`No names found in the ${pool} pool.`)
+        setCurrentName(null)
+        return
+      }
+
+      // Randomize the names
+      const shuffledNames = (nameData as Name[]).sort(() => 0.5 - Math.random())
+      
+      setNamesQueue(shuffledNames.slice(1)) 
+      setCurrentName(shuffledNames[0]) 
+      setStatusMessage(`Loaded ${shuffledNames.length} names from the ${pool} pool.`)
+      
     } catch (e: any) {
       // Log the full error object for better debugging visibility
       console.error('Fetch Error:', e)
