@@ -1,13 +1,8 @@
 'use client'
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { createClient } from '@supabase/supabase-js'
 import { User } from '@supabase/supabase-js'
-
-const supabaseClient = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://qwntpqrpvxzcstmpdlvk.supabase.co',
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmelyIsInJlZiI6InF3bnRwcXJwdnh6Y3N0bXBkbHZrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA4MDEyNDEsImV4cCI6MjA3NjM3NzI0MX0.4PRf07KU6vGpZWBVylhsyafPa9WsAvynjuFeVwAj_jw'
-)
+import { supabase as supabaseClient } from '@/lib/supabase'
 
 // Define the Name type based on our male_names table schema
 type Name = {
