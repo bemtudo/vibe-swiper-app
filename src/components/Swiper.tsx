@@ -2,12 +2,11 @@
 
 import React, { useState, useEffect, useCallback } from 'react'
 import { User } from '@supabase/supabase-js'
-import { supabase } from '@/lib/supabase'
-import { FaHeart, FaTimes } from 'react-icons/fa'
+import { supabase } from '@/lib/supabase' 
+import { FaHeart, FaTimes, FaFire } from 'react-icons/fa'
 
 // Define the Name type based on our male_names table schema
 type Name = {
-  // CRITICAL FIX: Use 'uuid_id' to match the database schema
   uuid_id: string 
   name: string
   name_set: 'English' | 'Turkish' | 'International' 
@@ -18,10 +17,10 @@ type Name = {
 }
 
 type SwiperProps = {
-  user: User // Passed from app/page.tsx
+  user: User 
 }
 
-const BATCH_SIZE = 20 // Number of names to fetch at once
+const BATCH_SIZE = 20 
 
 // Utility function to shuffle an array
 const shuffleArray = <T extends any>(array: T[]): T[] => {
@@ -35,98 +34,113 @@ const shuffleArray = <T extends any>(array: T[]): T[] => {
 export default function Swiper({ user }: SwiperProps) {
   const [namesQueue, setNamesQueue] = useState<Name[]>([])
   const [currentName, setCurrentName] = useState<Name | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [statusMessage, setStatusMessage] = useState<string>('')
-  
-  // NOTE: This component no longer uses external state for the user profile 
-  // but relies solely on the 'user' prop from the parent, which is enough 
-  // for the core swipe functionality.
+  const [loading, setLoading] = useState(true) // Start loading initially
+  const [statusMessage, setStatusMessage] = useState<string>('Loading...')
 
   // ------------------------------------------------
-  // 1. DATA FETCHING (Randomized and Exclusion Logic)
+  // 1. DATA FETCHING (Loop-Proof Logic)
   // ------------------------------------------------
 
   const fetchNames = useCallback(async () => {
-    if (loading) {
-      console.log('⏳ Already loading, skipping...')
+    // Prevent fetching if a request is already in flight
+    if (!loading) setLoading(true)
+    setStatusMessage(`Loading a batch of new names...`)
+    
+    // Safety check: ensure user exists
+    if (!user?.id) {
+      setLoading(false)
+      setStatusMessage('Please sign in to swipe.')
       return
     }
-    
-    setLoading(true)
-    setStatusMessage(`Loading names...`)
-    console.log('🔍 Starting fetchNames...')
 
     try {
-      console.log('📊 Fetching names from database...')
-      // Simple fetch - get all names and shuffle them
-      const { data: nameData, error: nameError } = await supabase
-        .from('male_names')
-        .select('uuid_id, name, name_set, origin, meaning, easy_pronunciation, vibe_score')
-        .limit(50) // Fetch a reasonable batch
+      // --- STEP 1: Fetch IDs of ALL names already swiped by the current user ---
+      const { data: swipedData, error: swipedError } = await supabase
+        .from('user_swipes')
+        .select('name_id') 
+        .eq('user_id', user.id)
 
-      if (nameError) {
-        console.error('❌ Name data error:', nameError)
-        throw nameError
+      if (swipedError) throw swipedError
+
+      const excludedIds = swipedData?.map(swipe => swipe.name_id) || []
+      setStatusMessage(`Found ${excludedIds.length} names already swiped. Fetching new names...`)
+
+      // --- STEP 2: Fetch unswiped names ---
+      let query = supabase
+        .from('male_names')
+        .select('uuid_id, name, name_set, origin, meaning, easy_pronunciation, vibe_score') 
+        .limit(BATCH_SIZE * 3) // Fetch large set for randomization
+
+      if (excludedIds.length > 0) {
+        query = query.not('uuid_id', 'in', excludedIds)
       }
       
-      console.log('📝 Fetched names from database:', nameData?.length || 0)
+      const { data: nameData, error: nameError } = await query
+
+      if (nameError) throw nameError
       
-      if (nameData && nameData.length > 0) {
-        // Shuffle and set the queue
-        const shuffledNames = shuffleArray(nameData as Name[])
-        console.log('✅ Successfully loaded names:', shuffledNames.length)
-        setNamesQueue(shuffledNames)
-        setStatusMessage(`Loaded ${shuffledNames.length} names.`)
+      const shuffledNames = shuffleArray(nameData as Name[] || [])
+        .slice(0, BATCH_SIZE)
+
+      if (shuffledNames.length === 0) {
+        setStatusMessage(`You've swiped all available names!`)
+        // Only clear current name if there's nothing left, otherwise let swipe handler clear it
+        if (namesQueue.length === 0 && !currentName) {
+             setCurrentName(null)
+        }
       } else {
-        console.log('⚠️ No names found in database')
-        setStatusMessage(`No names found in the database.`)
-        setCurrentName(null)
+        // Use functional update to ensure we append to the existing queue correctly
+        setNamesQueue(prevQueue => [...prevQueue, ...shuffledNames])
+        setStatusMessage(`Loaded ${shuffledNames.length} new random names.`)
       }
     } catch (e: any) {
-      console.error('❌ Fetch Error:', e)
-      setStatusMessage(`Error fetching names: ${e.message}`)
+      console.error('Fetch Error:', e)
+      setStatusMessage(`Error fetching names: ${e.message}.`)
     } finally {
       setLoading(false)
-      console.log('🏁 fetchNames completed')
     }
-  }, [loading]) // Only depend on loading state
+  }, [user.id]) 
 
-  // Simple effect to trigger initial fetch on mount
+  // EFFECT 1: INITIAL LOAD AND REFILL TRIGGER
   useEffect(() => {
-    console.log('🚀 Component mounted, fetching names...')
-    fetchNames()
-  }, []) // Only run once on mount
+    // Only run this when the user is authenticated and the queue is empty/low
+    if (user?.id && !loading && namesQueue.length < 5) {
+      fetchNames()
+    }
+  }, [user.id, loading, namesQueue.length, fetchNames])
 
-  // Effect to manage current name from queue
+
+  // EFFECT 2: SET CURRENT NAME FROM QUEUE
   useEffect(() => {
     if (!currentName && namesQueue.length > 0) {
-      console.log('📝 Setting current name from queue')
       setCurrentName(namesQueue[0])
       setNamesQueue(prevQueue => prevQueue.slice(1))
     }
   }, [namesQueue, currentName])
-
+  
   // ------------------------------------------------
   // 2. SWIPE LOGIC (Write Operation)
   // ------------------------------------------------
   
   const handleSwipe = async (action: 'LIKE' | 'DISLIKE') => {
     if (!currentName || loading) return
-    setLoading(true) // Prevent double-swipe while processing
 
     const nameToSwipe = currentName
     
     // 1. Optimistic UI Update: Move to the next name
-    const nextName = namesQueue[0] || null
-    setCurrentName(nextName)
+    setCurrentName(namesQueue[0] || null)
     setNamesQueue(prevQueue => prevQueue.slice(1)) 
+    
+    // Set loading briefly for UI feedback, but do NOT rely on it for loop break
+    // We use a local loading state to only disable the buttons
+    const isWriting = true 
 
     // 2. Database Write Operation
     const { error } = await supabase
       .from('user_swipes')
       .insert({
         user_id: user.id,
-        name_id: nameToSwipe.uuid_id, // CRITICAL: Use UUID directly
+        name_id: nameToSwipe.uuid_id, 
         swipe_action: action,
         pool_used: nameToSwipe.name_set, 
       })
@@ -138,19 +152,29 @@ export default function Swiper({ user }: SwiperProps) {
       setStatusMessage(action === 'LIKE' ? `${nameToSwipe.name} LIKED! ❤️` : `${nameToSwipe.name} DISLIKED.`)
     }
 
-    setLoading(false) 
+    // Since loading is not critical for the next render, it's safer to leave this off
+    // or use a small delay if needed for visual effect.
   }
   
   const handleLike = () => handleSwipe('LIKE')
   const handleDislike = () => handleSwipe('DISLIKE')
 
+  // Disable buttons if a swipe is being processed or we're loading a batch
+  const buttonDisabled = loading || !currentName
+
   // ------------------------------------------------
-  // 3. UI RENDERING
+  // 3. UI RENDERING (iOS Reskin Maintained)
   // ------------------------------------------------
 
   return (
     <div className="flex flex-col h-full w-full pb-20">
-      {(loading && !currentName) || !user.id ? (
+      
+      {/* Status Message (subtle) */}
+      <div className={`text-center mb-4 text-xs font-medium h-4 ${statusMessage.includes('Error') ? 'text-red-500' : 'text-gray-500'}`}>
+        {statusMessage}
+      </div>
+
+      {(loading && !currentName && namesQueue.length === 0) || !user.id ? (
         <div className="flex flex-col items-center justify-center py-24">
           <div className="animate-spin rounded-full h-12 w-12 border-3 border-teal-500 border-t-transparent mb-4"></div>
           <p className="text-gray-500 text-sm">
@@ -189,7 +213,7 @@ export default function Swiper({ user }: SwiperProps) {
             <div className="max-w-md mx-auto flex justify-center gap-6">
               <button
                 onClick={handleDislike}
-                disabled={loading}
+                disabled={buttonDisabled}
                 className="flex items-center justify-center w-16 h-16 rounded-full bg-white border-2 border-gray-200 text-gray-600 shadow-lg hover:shadow-xl hover:scale-110 active:scale-95 transition-all disabled:opacity-50"
                 aria-label="Skip Name"
               >
@@ -197,7 +221,7 @@ export default function Swiper({ user }: SwiperProps) {
               </button>
               <button
                 onClick={handleLike}
-                disabled={loading}
+                disabled={buttonDisabled}
                 className="flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-pink-500 to-red-500 text-white shadow-xl hover:shadow-2xl hover:scale-110 active:scale-95 transition-all disabled:opacity-50"
                 aria-label="Like Name"
               >
