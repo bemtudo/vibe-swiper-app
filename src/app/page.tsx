@@ -20,22 +20,35 @@ const ResultsView = ({ user }: { user: any }) => {
   useEffect(() => {
     const fetchLikedNames = async () => {
       try {
-        // Efficient query to join male_names with user_swipes
-        const { data, error } = await supabase
+        // First, get user's liked names
+        const { data: swipeData, error: swipeError } = await supabase
           .from('user_swipes')
-          .select(`
-            name_id,
-            male_names!inner (name, origin, meaning, name_set, easy_pronunciation)
-          `)
+          .select('name_id')
           .eq('user_id', user.id)
-          .eq('swipe_action', 'LIKE') // Only fetch names you swiped LIKE
+          .eq('swipe_action', 'LIKE')
 
-        if (error) {
-          console.error('Error fetching liked names:', error)
-        } else if (data) {
-          // Flatten the data structure for clean display
-          const names = data.map(d => ({ ...d.male_names, name_id: d.name_id }))
-          setLikedNames(names)
+        if (swipeError) {
+          console.error('Error fetching user swipes:', swipeError)
+          return
+        }
+
+        if (!swipeData || swipeData.length === 0) {
+          setLikedNames([])
+          setLoading(false)
+          return
+        }
+
+        // Then, get the actual name details
+        const nameIds = swipeData.map(s => s.name_id)
+        const { data: nameData, error: nameError } = await supabase
+          .from('male_names')
+          .select('*')
+          .in('id', nameIds)
+
+        if (nameError) {
+          console.error('Error fetching names:', nameError)
+        } else {
+          setLikedNames(nameData || [])
         }
       } catch (err) {
         console.error('Error:', err)
